@@ -50,7 +50,11 @@ class Device:
         self.adb("shell", "svc", "bluetooth", "enable")
         self.adb("shell", "am", "start", "-W", "-n", "app.chitchat/.MainActivity")
         root = self.wait("What should we call you?", seconds=60, recover_launcher=True)
-        self.tap(root, "Later")
+        self.adb("shell", "input", "keyevent", "BACK")
+        time.sleep(0.6)
+        root = self.screen()
+        if any("What should we call you?" in n.get("text", "") for n in root.iter("node")):
+            self.tap(root, "Later")
         self.wait("Open a room")
     def enter(self, message):
         root = self.screen()

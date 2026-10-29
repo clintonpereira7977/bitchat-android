@@ -48,7 +48,12 @@ adb("logcat", "-c")
 adb("install", "-r", "dist/ChitChat-android.apk")
 adb("shell", "am", "start", "-W", "-n", "app.chitchat/.MainActivity")
 view = wait_for("What should we call you?")
-tap(node(view, "Later"))
+# A first-launch keyboard transition can move the dialog between dump and tap.
+adb("shell", "input", "keyevent", "BACK")
+time.sleep(0.6)
+view = screen()
+if node(view, "What should we call you?") is not None:
+    tap(node(view, "Later"))
 view = wait_for("Small talk.")
 assert node(view, "Open a room") is not None
 assert node(view, "Find a friend") is not None
