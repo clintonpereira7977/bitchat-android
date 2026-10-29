@@ -4,10 +4,10 @@
   "protocol": "ChitChat/v2",
   "androidPackage": "app.chitchat",
   "minimumAndroid": "8.0",
-  "sourceCommit": "012f3be2363df58f39c7d960e6306dd5d7db45e2",
-  "workflowRun": "40819999669",
-  "nativeRuntimeChecks": "failure",
-  "apkSHA256": "6d5ce557505cf400e8994893dac10d59d6cec8da945fca7effc1163ecec70593",
+  "sourceCommit": "8a55225a6de2f8118fda3fa394db3b06916be97d",
+  "workflowRun": "40820600543",
+  "nativeRuntimeChecks": "success",
+  "apkSHA256": "6e8f945095a0569f1a7af4220f14c6fc837497f69206ab49ce6b7f0cd09aee6b",
   "identity": "Connection approval does not authenticate a person's identity.",
   "physicalPhonesVerified": false
 }
