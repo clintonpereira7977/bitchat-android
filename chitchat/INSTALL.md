@@ -34,7 +34,7 @@ Version 0.2 uses a new protocol. Update **both** phones; it cannot chat with the
 1. Start within **1–2 metres** with both apps open.
 2. You tap **Open a room**. Note the four-character room ID.
 3. Your friend taps **Find a friend**, then **Connect** beside your room ID. If discovery doesn't show a room ID, look for **Nearby ChitChat room**.
-4. Your friend taps **Connect** to send a request. You see their nickname and choose **Accept** or **Decline**. Accept opens the chat on both phones; there is no code to compare. Only accept requests you expect; a nickname does not prove someone’s identity.
+4. You see their connection request and nickname. Choose **Accept** or **Decline**. Accept opens the chat on both phones; there is no code to compare. Only accept requests you expect; a nickname does not prove someone’s identity.
 5. Type a message and tap the white **↑** button. “Delivered ✓” appears after the recipient app acknowledges receipt.
 6. Keep both apps visible. Range depends on hardware, walls and interference; no fixed range is promised. Leaving the app, losing Bluetooth or moving out of range closes the session. Reconnect by opening a new room. Messages are not queued for later delivery.
 

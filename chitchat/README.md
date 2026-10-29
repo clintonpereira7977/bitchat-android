@@ -4,7 +4,7 @@
 
 ## Delivery status — read this first
 
-Version **0.2.0** replaces manual code matching with connection requests. Both phones need this updated version. The Android and iPhone request/approval code is implemented; the Build ChitChat workflow tracks native compilation and runtime checks. Download a verified APK only after its build succeeds.
+Version **0.2.0** replaces manual code matching with connection requests. Both phones need this updated version. The Android APK is built and signature-verified. Native UI and two-emulator Bluetooth checks passed for cancellation, decline, automatic room reopening, one-tap acceptance, locked chat before approval, and encrypted messaging both ways. The updated iPhone source compiles and its consent/crypto checks pass. The Build ChitChat workflow records the results.
 
 The room owner sees the requester's nickname and chooses Accept or Decline. Chat stays locked until acceptance. Declining or cancelling closes the request and keeps the owner's room available. Messages remain encrypted, but nicknames are unverified; only accept requests you expect. Physical-phone compatibility remains unverified, and the iPhone project still requires Apple signing. See [installation](INSTALL.md) and [validation](docs/VALIDATION.md).
 

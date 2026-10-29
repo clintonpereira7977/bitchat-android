@@ -9,12 +9,17 @@ Current change: replace manual fingerprint comparison with requester consent and
 - 12 independent Python cryptography sessions against Java passed for version 2 hello format, ECDH/HKDF, directional keys, internal key fingerprint and AES-GCM in both directions.
 - Android XML, iPhone plist, assets, Python test sources and workflow structure parsed successfully.
 
-## Pending native CI
+## Native CI passed
 
-- Android native compile, APK signature verification and UI smoke checks.
-- Paired Android emulator checks: no composer before approval; requester cancellation; decline; owner room reopening; one-tap accept; encrypted messages both directions; receipts; typing/draft preservation; disconnect cleanup.
-- Swift/CryptoKit consent and encryption tests, including the independent deterministic fixture.
-- iPhone project simulator compilation.
+Successful run: `40820600543`. Tested source commit: `8a55225a6de2f8118fda3fa394db3b06916be97d`.
+
+- Android native compile and `apksigner` signature verification passed.
+- Native Android 15 UI checks passed for launch, home controls, help, nickname saving across process restart, permission-denial recovery and no runtime crash.
+- Two Android emulators passed requester cancellation, decline and acknowledgment, automatic owner-room reopening, a fresh request after refusal, no composer before approval, one-tap owner acceptance, no code-comparison UI, encrypted messages in both directions, delivery receipts, draft/focus preservation and disconnect cleanup.
+- 3,104 Swift/CryptoKit checks passed, including consent ordering, early/wrong-role rejection, decline and version-2 encryption fixtures.
+- The iPhone project compiled successfully for the iOS simulator.
+
+Emulator startup recovery handles the synthetic Pixel Launcher's own crash dialog; it does not dismiss or ignore ChitChat crashes.
 
 ## Limits
 
