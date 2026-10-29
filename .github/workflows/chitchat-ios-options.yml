@@ -1,0 +1,61 @@
+name: Build ChitChat iPhone installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/chitchat-ios-options]
+    paths:
+      - '.github/workflows/chitchat-ios-options.yml'
+      - 'chitchat/ios/**'
+      - 'chitchat/scripts/publish-iphone.py'
+permissions:
+  contents: read
+jobs:
+  iphone:
+    runs-on: macos-14
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: chitchat
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Swift encryption and connection approval
+        run: |
+          swiftc ios/ChitChat/SessionCrypto.swift ios/ChitChat/ConsentGate.swift tests/SwiftProtocolTest.swift -o "$RUNNER_TEMP/chitchat-swift-tests"
+          "$RUNNER_TEMP/chitchat-swift-tests"
+      - name: Build for a physical iPhone without a developer signature
+        run: |
+          xcodebuild -project ios/ChitChat.xcodeproj -scheme ChitChat -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/chitchat-device" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+          mkdir -p dist/iphone/Payload
+          cp -R "$RUNNER_TEMP/chitchat-device/Build/Products/Release-iphoneos/ChitChat.app" dist/iphone/Payload/
+          file dist/iphone/Payload/ChitChat.app/ChitChat
+          xcrun vtool -show-build dist/iphone/Payload/ChitChat.app/ChitChat
+          python3 - <<'PY'
+          import plistlib, pathlib, subprocess
+          app=pathlib.Path('dist/iphone/Payload/ChitChat.app')
+          info=plistlib.loads((app/'Info.plist').read_bytes())
+          assert info['CFBundleSupportedPlatforms']==['iPhoneOS'], 'Must be a device app, not a simulator app'
+          assert info['MinimumOSVersion']=='16.0'
+          assert info['NSBluetoothAlwaysUsageDescription']
+          binary=subprocess.check_output(['file',str(app/'ChitChat')],text=True)
+          assert 'arm64' in binary
+          print('PASS: unsigned physical iPhone arm64 app, iOS 16+, Bluetooth usage description')
+          PY
+          cd dist/iphone
+          ditto -c -k --keepParent Payload ../ChitChat-iPhone-unsigned.ipa
+          cd ..
+          shasum -a 256 ChitChat-iPhone-unsigned.ipa > SHA256SUMS-iPhone.txt
+          cp ../docs/INSTALL-IPHONE-WINDOWS.md INSTALL-IPHONE-WINDOWS.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChitChat-iPhone-for-Windows-sideloading
+          path: |
+            chitchat/dist/ChitChat-iPhone-unsigned.ipa
+            chitchat/dist/SHA256SUMS-iPhone.txt
+            chitchat/dist/INSTALL-IPHONE-WINDOWS.md
+          if-no-files-found: error
+      - name: Publish the iPhone package beside the Android download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-iphone.py
