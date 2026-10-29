@@ -1,5 +1,6 @@
 """Try native BLE messaging between two synthetic Android emulator devices."""
 from pathlib import Path
+import os
 import re
 import subprocess
 import time
@@ -60,10 +61,13 @@ guest = Device("emulator-5556")
 assert host.adb("shell", "getprop", "ro.kernel.qemu").strip() == "1"
 subprocess.run(["avdmanager", "create", "avd", "--force", "--name", "chitchat_peer", "--package", "system-images;android-35;google_apis;x86_64", "--device", "pixel_6"], input="no\n", text=True, check=True, stdout=subprocess.DEVNULL)
 with open("dist/peer-emulator.log", "w") as log:
-    process = subprocess.Popen(["emulator", "-avd", "chitchat_peer", "-port", "5556", "-no-window", "-gpu", "swiftshader_indirect", "-no-snapshot", "-noaudio", "-no-boot-anim", "-memory", "2048", "-cores", "2"], stdout=log, stderr=log)
+    emulator_binary = str(Path(os.environ["ANDROID_HOME"]) / "emulator/emulator")
+    process = subprocess.Popen([emulator_binary, "-avd", "chitchat_peer", "-port", "5556", "-no-window", "-gpu", "swiftshader_indirect", "-no-snapshot", "-noaudio", "-no-boot-anim", "-memory", "2048", "-cores", "2"], stdout=log, stderr=log)
     try:
         end = time.monotonic() + 240
         while time.monotonic() < end:
+            if process.poll() is not None:
+                raise RuntimeError("Second emulator exited during startup: " + Path("dist/peer-emulator.log").read_text()[-2500:])
             try:
                 if guest.adb("shell", "getprop", "sys.boot_completed").strip() == "1":
                     break
@@ -81,7 +85,16 @@ with open("dist/peer-emulator.log", "w") as log:
         room = re.search(r"Room ([0-9A-F]{4}) is open", " ".join(n.get("text", "") for n in opened.iter("node")))
         assert room, "Host must advertise a room"
         guest.tap(guest.screen(), "Find a friend")
-        guest.tap(guest.wait("Room " + room.group(1), seconds=28), "Room " + room.group(1))
+        end = time.monotonic() + 28
+        while time.monotonic() < end:
+            root = guest.screen()
+            label = next((n.get("text", "") for n in root.iter("node") if ("Room " + room.group(1)) in n.get("text", "") or "Nearby ChitChat room" in n.get("text", "")), None)
+            if label:
+                guest.tap(root, label)
+                break
+            time.sleep(0.5)
+        else:
+            raise AssertionError("Guest did not discover the native BLE room")
         a = host.wait("Same little secret?")
         b = guest.wait("Same little secret?")
         def code(root):
