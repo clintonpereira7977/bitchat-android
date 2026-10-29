@@ -1,6 +1,6 @@
 # Validation record
 
-## Completed in the authoring workspace
+## Completed checks
 
 - Android Java source syntax parsing via the JDK compiler parser. This is a parse check, not Android API type checking or a native build.
 - 2,965 Java protocol assertions: fresh P-256 agreement, matching code, Unicode round trips, bidirectional AES-GCM, fragmentation at MTU 23, invalid flags / sequence / bounds, expired assembly, reflected keys, reflected encrypted packets, duplicate hellos, modified tags, replay, and session key destruction.
@@ -8,13 +8,22 @@
 - Android manifest/resource XML, iPhone plist, asset JSON, shared Xcode scheme and CI YAML structurally validated.
 - Shell build/test scripts checked with `bash -n`.
 
-## Not completed here
+## Native build and runtime results
 
-- **Android SDK build / APK signing and verification:** pending the Build ChitChat workflow. Download an APK only from a successful Android job.
-- **Swift / Xcode compilation and CryptoKit test execution:** pending the simulator-compile CI job. Apple signing and installation on a real iPhone remain separate steps.
-  The Swift suite includes a deterministic test vector generated independently in Python to check the exact public-key, HKDF, directional-key and AES-GCM formats; it has not yet been executed here.
-- **UI screenshots / runtime UI review:** no compiled native app, simulator, emulator or connected physical phone available. No browser mockup is presented as a phone test.
-- **Real Bluetooth:** no available Android/iOS radios. Android↔Android, Android↔iOS and iOS↔iOS must be checked on actual phones. Simulators do not establish BLE reliability.
+- Android SDK 35 native build succeeded. The debug APK passed `apksigner verify`.
+- Android 15 emulator UI checks passed: native launch, home actions, help dialog, nickname saving across process restart, permission-denial recovery, and no Android runtime crash during those flows. Actual native screen captures are published with the installer.
+- 3,081 Swift / CryptoKit checks passed on a Mac runner, including the independent Python-generated format vector.
+- Paired Android 15 emulator BLE checks passed: advertising, discovery, GATT subscription, matching verification codes, encrypted fragmented messages in both directions, receiver acknowledgments, draft and keyboard-focus preservation while receiving, and disconnect cleanup. These use simulated radios and do not establish physical-phone compatibility.
+- The iPhone project compiled successfully for the iOS simulator.
+- Java protocol and independent Python interoperability tests also passed on the GitHub build runner.
+
+Successful native build and paired-emulator run: `40813444408`, tested app commit `dd0b94ffb7dfd114f727622e795914cd3a8dc110`.
+
+## Verification limits
+
+- **iPhone installation:** Apple signing and installation on a real iPhone remain separate steps.
+- **UI coverage:** Android screen captures and the stated native flows were checked. iPhone UI runtime checks and the remaining Android screens have not all been exercised.
+- **Physical Bluetooth:** Android↔Android, Android↔iOS and iOS↔iOS must be checked on actual phones. Emulator tests do not establish physical radio range, background behavior or hardware compatibility.
 - **Independent security audit:** not performed. See the protocol's security boundary.
 
 ## Physical-device acceptance checklist

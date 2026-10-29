@@ -4,7 +4,9 @@
 
 ## Delivery status — read this first
 
-This folder contains an independent Android and iOS app, protocol tests, build scripts, and an Xcode project. Native build results are tracked by the repository's **Build ChitChat** workflow. Download the **ChitChat-Android-APK** artifact after the Android job succeeds. Real phone-to-phone Bluetooth tests remain outstanding; see [validation](docs/VALIDATION.md). The iPhone project requires Apple signing before installation.
+An installable Android APK has been built, signature-verified, and checked on an Android 15 emulator. The **Build ChitChat** workflow also compiles the iPhone project and runs its CryptoKit tests. The Android installer is published on the separate `codex/chitchat-download` branch under `downloads/ChitChat-android.apk`, and as the **ChitChat-Android-APK** workflow artifact.
+
+Android native checks cover launch, home actions, help, nickname persistence and permission-denial recovery. Two emulated Android phones also passed discovery, verification, encrypted messages in both directions, delivery receipts, draft preservation and disconnect cleanup. Physical phone-to-phone Bluetooth compatibility remains unverified. The iPhone app still needs Apple signing through Xcode or TestFlight before installation. See [installation](INSTALL.md) and [validation](docs/VALIDATION.md).
 
 ## What is implemented
 
@@ -43,7 +45,7 @@ Output: `dist/ChitChat-android.apk` and its checksum. The debug signing key is c
 
 ### Optional GitHub Actions build
 
-This repository includes `.github/workflows/chitchat-build.yml`. Open **Actions → Build ChitChat → Run workflow**. When the Android job succeeds, download the **ChitChat-Android-APK** artifact and unzip it. It contains the APK and checksum. The iOS job compiles for the simulator without signing; it does not distribute an iPhone installation file.
+This repository includes `.github/workflows/chitchat-build.yml`. Open **Actions → Build ChitChat** and select a successful run. Pushes to `codex/chitchat-build` start the workflow automatically. When the Android job succeeds, download the **ChitChat-Android-APK** artifact and unzip it. It contains the APK and checksum. The iOS job compiles for the simulator without signing; it does not distribute an iPhone installation file.
 
 GitHub-hosted builds use a fresh debug signing key on each runner. For personal updates built on a different runner, uninstalling the old app may be needed. For a durable release, configure your own protected signing key. The workflow builds this independent app under `chitchat/`; it does not build the original BitChat client.
 

@@ -1,6 +1,8 @@
 # Install ChitChat on two phones
 
-Download the **ChitChat-Android-APK** artifact from **Actions → Build ChitChat** after the Android job succeeds, then unzip it. It contains `ChitChat-android.apk` and a checksum. The Android source is in `chitchat/android/`; the iPhone project is `chitchat/ios/ChitChat.xcodeproj`. Native build results do not replace real phone-to-phone tests.
+**The Android APK is built.** Download `ChitChat-android.apk` from the repository's `codex/chitchat-download` branch → `downloads/`, or download and unzip the **ChitChat-Android-APK** artifact from a successful **Actions → Build ChitChat** run. Open the APK directly in your phone's Files app.
+
+The Android source is in `chitchat/android/`; the iPhone project is `chitchat/ios/ChitChat.xcodeproj`. The iPhone project compiles, but installation still requires Apple signing. Physical phone-to-phone Bluetooth tests remain outstanding.
 
 ## Two Android phones
 
@@ -8,9 +10,11 @@ Requires Android 8.0+ and Bluetooth Low Energy. At least one phone must support 
 
 ### 1. Get the APK
 
-Build it using the README. Your file will be named either `app-debug.apk` or `ChitChat-android.apk`; they are the same application build if copied by the provided script. Keep the original file to share and keep a copy of the build computer's debug signing key for future updates.
+Use the built APK described above, or build your own using the README. Your file will be named either `app-debug.apk` or `ChitChat-android.apk`; they are the same application build if copied by the provided script. Keep the original file to share and keep a copy of the build computer's debug signing key for future updates.
 
 ### 2. Install on your phone
+
+If you installed an earlier test APK, uninstall it first when Android reports a signature conflict. Personal CI builds may use different debug signing keys.
 
 1. Transfer the APK to your phone by USB, Quick Share, or a file-sharing app.
 2. Open **Files / My Files**, find the APK, and tap it.
