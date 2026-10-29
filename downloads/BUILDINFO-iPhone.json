@@ -1,0 +1,15 @@
+{
+  "app": "ChitChat",
+  "version": "0.2.0",
+  "protocol": "ChitChat/v2",
+  "minimumIOS": "16.0",
+  "architecture": "arm64",
+  "sourceCommit": "25b21ef8ab657590d8bc922486baf660e6eb13ba",
+  "workflowRun": "40857438228",
+  "deviceBuild": "success",
+  "swiftChecks": "passed",
+  "signed": false,
+  "installation": "Sign with your own Apple Account using SideStore, Sideloadly or Xcode. This unsigned IPA cannot be installed directly.",
+  "physicalIPhoneTested": false,
+  "sha256": "d8e7d448779e1c42165184c606affc84685a690d85cf588145bd8cda07cf29e3"
+}
