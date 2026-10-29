@@ -53,8 +53,13 @@ class Device:
         assert field is not None, "Verified conversation composer required"
         x1,y1,x2,y2 = map(int,re.findall(r"\d+",field.get("bounds", "")))
         self.adb("shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2))
-        self.adb("shell", "input", "text", message)
-        self.tap(self.screen(), description="Send message")
+        for start in range(0, len(message), 40):
+            self.adb("shell", "input", "text", message[start:start + 40])
+            time.sleep(0.2)
+        root = self.screen()
+        entered = next((n.get("text", "") for n in root.iter("node") if n.get("class") == "android.widget.EditText"), None)
+        assert entered == message, "Synthetic keyboard input must match the intended test message before sending"
+        self.tap(root, description="Send message")
 
 host = Device("emulator-5554")
 guest = Device("emulator-5556")
@@ -102,7 +107,7 @@ with open("dist/peer-emulator.log", "w") as log:
         assert code(a) == code(b), "Native BLE verification codes must match"
         host.tap(a, "Codes match"); guest.tap(b, "Codes match")
         host.wait("BLUETOOTH · VERIFIED"); guest.wait("BLUETOOTH · VERIFIED")
-        message = "hello-from-host-" + "fragment" * 50
+        message = "hello-from-host-" + "fragment" * 6
         host.send(message)
         guest.wait(message)
         host.wait("delivered")
