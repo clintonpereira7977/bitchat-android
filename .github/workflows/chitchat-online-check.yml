@@ -1,0 +1,58 @@
+name: Check ChitChat internet backend
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/chitchat-online]
+    paths:
+      - 'chitchat/online/**'
+      - '.github/workflows/chitchat-online-check.yml'
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: chitchat/online
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned Wrangler and produce dependency lock
+        run: npm install --ignore-scripts=false
+      - name: Check delivery API and push behavior with synthetic data
+        run: npm test && npm run check
+      - name: Verify Cloudflare bundle and free-compatible storage migration
+        run: npm run dry-run
+      - name: Exercise actual local Cloudflare runtime and WebSockets
+        run: node test/runtime.mjs
+      - name: Upload reproducible dependency lock
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChitChat-online-dependency-lock
+          path: chitchat/online/package-lock.json
+          if-no-files-found: error
+      - name: Publish tested dependency lock for reproducible deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYLOCK'
+          import base64,json,os,pathlib,subprocess
+          repo=os.environ['GITHUB_REPOSITORY']; branch='codex/chitchat-download'; target='downloads/ChitChat-online-package-lock.json'
+          endpoint=f'repos/{repo}/contents/{target}'
+          previous=subprocess.run(['gh','api',endpoint+'?ref=codex%2Fchitchat-download'],capture_output=True,text=True)
+          old=json.loads(previous.stdout) if previous.returncode==0 else None
+          if previous.returncode and '404' not in previous.stderr: raise RuntimeError(previous.stderr)
+          payload={'message':'Publish tested ChitChat online dependency lock','branch':branch,'content':base64.b64encode(pathlib.Path('package-lock.json').read_bytes()).decode()}
+          if old: payload['sha']=old['sha']
+          result=subprocess.run(['gh','api','--method','PUT',endpoint,'--input','-'],input=json.dumps(payload),capture_output=True,text=True)
+          if result.returncode: raise RuntimeError(result.stderr)
+          print('Published tested online dependency lock')
+          PYLOCK

@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chitchat-online",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-28",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "durable_objects": {
+    "bindings": [{ "name": "DELIVERY", "class_name": "DeliveryService" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DeliveryService"] }],
+  "vars": {
+    "MAX_ACCOUNTS": "100",
+    "DAILY_REQUEST_LIMIT": "20000",
+    "DAILY_MESSAGE_LIMIT": "5000",
+    "ACCOUNT_DAILY_MESSAGE_LIMIT": "100",
+    "INBOX_MESSAGE_LIMIT": "200",
+    "GLOBAL_QUEUE_LIMIT": "5000"
+  }
+}
