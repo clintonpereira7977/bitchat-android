@@ -22,6 +22,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -40,6 +42,25 @@ jobs:
             chitchat/dist/ChitChat-android.apk
             chitchat/dist/SHA256SUMS.txt
           if-no-files-found: error
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Check native Android screens
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          working-directory: chitchat
+          script: python3 tests/android_smoke.py
+      - name: Upload native screen captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChitChat-Android-Screens
+          path: chitchat/dist/ui/*.png
+          if-no-files-found: ignore
   ios-compile:
     runs-on: macos-14
     timeout-minutes: 20
