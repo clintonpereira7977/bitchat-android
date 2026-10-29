@@ -19,8 +19,23 @@ public final class PushIntegrationTest {
     @Before public void setup() {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         OnlinePush.disable(context);
+        notifications(0);
     }
-    @After public void cleanup() { OnlinePush.disable(context); }
+    @After public void cleanup() { OnlinePush.disable(context); notifications(0); }
+    private android.service.notification.StatusBarNotification[] notifications(int expected) {
+        // Android queues notify/cancel in the system service. Check the actual
+        // resulting state rather than assuming either Binder call is a barrier.
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        long deadline = android.os.SystemClock.uptimeMillis() + 3000;
+        android.service.notification.StatusBarNotification[] current;
+        do {
+            current = manager.getActiveNotifications();
+            if (current.length == expected) return current;
+            android.os.SystemClock.sleep(25);
+        } while (android.os.SystemClock.uptimeMillis() < deadline);
+        assertEquals("Android notification state did not settle", expected, current.length);
+        return current;
+    }
     @Test public void suppliedConfigIsPackagedButAutomaticRegistrationIsOff() {
         FirebaseOptions options = FirebaseOptions.fromResource(context);
         assertNotNull(options);
@@ -41,7 +56,7 @@ public final class PushIntegrationTest {
         OnlinePush.recordRotatedToken(context, "synthetic-registration-token-00001");
         assertEquals("", OnlinePush.pendingToken(context));
         PushNotifications.show(context, "inbox");
-        assertEquals(0, context.getSystemService(NotificationManager.class).getActiveNotifications().length);
+        notifications(0);
     }
     @Test public void tokenRotationIsAccountBoundAndOptOutClearsEverything() {
         OnlinePush.enableForRegisteredAccount(context, ACCOUNT);
@@ -62,9 +77,9 @@ public final class PushIntegrationTest {
         OnlinePush.enableForRegisteredAccount(context, ACCOUNT);
         PushNotifications.show(context, "PRIVATE_TEXT_MUST_NOT_APPEAR");
         NotificationManager manager = context.getSystemService(NotificationManager.class);
-        assertEquals(0, manager.getActiveNotifications().length);
+        notifications(0);
         PushNotifications.show(context, "inbox");
-        android.service.notification.StatusBarNotification[] notifications = manager.getActiveNotifications();
+        android.service.notification.StatusBarNotification[] notifications = notifications(1);
         assertEquals(1, notifications.length);
         Notification n = notifications[0].getNotification();
         assertEquals("ChitChat", n.extras.getString(Notification.EXTRA_TITLE));
@@ -72,6 +87,6 @@ public final class PushIntegrationTest {
         assertEquals(Notification.VISIBILITY_PRIVATE, n.visibility);
         assertNotNull(n.contentIntent); assertTrue(n.contentIntent.isImmutable());
         OnlinePush.disable(context);
-        assertEquals(0, manager.getActiveNotifications().length);
+        notifications(0);
     }
 }
