@@ -1,13 +1,11 @@
-# ChitChat — Android installer
+# ChitChat 0.2 — connection requests
 
-Download `ChitChat-android.apk`, open it in Files / My Files, allow installation from that file manager if prompted, then tap Install. If an earlier personal test build causes a signature conflict, uninstall that build first.
+Install `ChitChat-android.apk` on both Android phones. If an earlier personal test APK causes a signature conflict, uninstall it first. Open the APK with Files / My Files and allow installation from that file manager when prompted.
 
-Install the same APK on your friend's Android. ChitChat's home screen can share its installed APK through Quick Share or another file-transfer app.
+One person opens a room. The other finds it and taps Connect. The room owner taps Accept or Decline. Accept opens the encrypted chat on both phones; no code comparison is required. Keep both apps visible while chatting. Android 8–11 also needs Location enabled for BLE scanning.
 
-Both enable Bluetooth and allow Nearby devices. One opens a room; the other finds it. Compare the 12-character code and both tap Codes match. Keep both apps visible while chatting. Android 8–11 also requires Location enabled for BLE scanning.
+Approval grants permission to chat. Nicknames are not verified identities. Only accept requests you expect.
 
-The verified build passed native Android UI checks and a two-emulator BLE test covering discovery, verification, encrypted messages both ways, delivery receipts, draft preservation and disconnect cleanup. Physical-phone compatibility and range have not been verified.
+See BUILDINFO.json and the Build ChitChat workflow for this build's test results. Physical-phone compatibility and range have not been verified. The iPhone source needs Apple signing for installation. Source and the full guide are on the `codex/chitchat-build` branch under `chitchat/`.
 
-The iPhone source compiles, but installation requires Apple signing through Xcode or TestFlight. Source and the full guide are on the `codex/chitchat-build` branch under `chitchat/`.
-
-This is an independent direct Bluetooth chat app. It does not implement BitChat mesh relay.
+This is an independent direct Bluetooth chat app, without BitChat mesh relay. Version 0.2 requires the updated app on both phones.
