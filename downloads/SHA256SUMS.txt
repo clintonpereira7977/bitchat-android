@@ -1,1 +1,1 @@
-ec8dc2e6ddbbdacc36077fb780a91624d16f7029b41a06b7d7d942ed4e02e4fa  dist/ChitChat-android.apk
+b4dd26b33e2df32316118646c9c580aaac85624cde01c633617b5a19f8182956  dist/ChitChat-android.apk
