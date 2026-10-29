@@ -47,7 +47,7 @@ class Device:
         root = self.wait("What should we call you?")
         self.tap(root, "Later")
         self.wait("Open a room")
-    def send(self, message):
+    def enter(self, message):
         root = self.screen()
         field = next((n for n in root.iter("node") if n.get("class") == "android.widget.EditText"), None)
         assert field is not None, "Verified conversation composer required"
@@ -59,7 +59,9 @@ class Device:
         root = self.screen()
         entered = next((n.get("text", "") for n in root.iter("node") if n.get("class") == "android.widget.EditText"), None)
         assert entered == message, "Synthetic keyboard input must match the intended test message before sending"
-        self.tap(root, description="Send message")
+        return root
+    def send(self, message):
+        self.tap(self.enter(message), description="Send message")
 
 host = Device("emulator-5554")
 guest = Device("emulator-5556")
@@ -107,11 +109,14 @@ with open("dist/peer-emulator.log", "w") as log:
         assert code(a) == code(b), "Native BLE verification codes must match"
         host.tap(a, "Codes match"); guest.tap(b, "Codes match")
         host.wait("BLUETOOTH · VERIFIED"); guest.wait("BLUETOOTH · VERIFIED")
+        guest.enter("hello-from-guest")
         message = "hello-from-host-" + "fragment" * 6
         host.send(message)
-        guest.wait(message)
+        incoming = guest.wait(message)
+        draft = next((n for n in incoming.iter("node") if n.get("class") == "android.widget.EditText"), None)
+        assert draft is not None and draft.get("text") == "hello-from-guest" and draft.get("focused") == "true", "Incoming messages must preserve the active draft and keyboard focus"
         host.wait("delivered")
-        guest.send("hello-from-guest")
+        guest.tap(guest.screen(), description="Send message")
         host.wait("hello-from-guest")
         guest.wait("delivered")
         host.adb("shell", "input", "keyevent", "BACK")
