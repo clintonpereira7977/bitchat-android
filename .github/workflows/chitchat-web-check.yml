@@ -1,0 +1,89 @@
+name: Check ChitChat Bluefy client
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/chitchat-ios-options]
+    paths:
+      - 'chitchat/web/**'
+      - 'chitchat/tests/web.test.mjs'
+      - 'chitchat/tests/browser.cjs'
+      - 'chitchat/tests/run-web.sh'
+      - '.github/workflows/chitchat-web-check.yml'
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: chitchat
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Protocol and synthetic Bluetooth transport
+        run: bash tests/run-web.sh
+      - name: Install browser test dependency
+        run: |
+          npm install --prefix "$RUNNER_TEMP/chitchat-qa" --no-package-lock playwright@1.56.1
+          "$RUNNER_TEMP/chitchat-qa/node_modules/.bin/playwright" install chromium --with-deps
+      - name: Mobile UI, safe rendering and offline reload
+        env:
+          CHITCHAT_PLAYWRIGHT: ${{ runner.temp }}/chitchat-qa/node_modules/playwright
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory web > "$RUNNER_TEMP/chitchat-web-preview.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          for attempt in {1..20}; do if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then break; fi; sleep 1; done
+          node tests/browser.cjs
+      - name: Save synthetic browser previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChitChat-Bluefy-previews
+          path: chitchat/dist/web-ui/*.png
+          if-no-files-found: ignore
+      - name: Package web client
+        run: |
+          mkdir -p dist
+          python3 - <<'PY'
+          import zipfile,pathlib
+          with zipfile.ZipFile('dist/ChitChat-Bluefy.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for p in pathlib.Path('web').rglob('*'):
+                  if p.is_file(): z.write(p,'ChitChat-Bluefy/'+str(p.relative_to('web')))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChitChat-Bluefy-client
+          path: chitchat/dist/ChitChat-Bluefy.zip
+          if-no-files-found: error
+      - name: Publish synthetic previews and web download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,json,os,pathlib,subprocess,urllib.parse
+          repo=os.environ['GITHUB_REPOSITORY']; branch='codex/chitchat-download'
+          def api(method,path,body=None):
+              command=['gh','api','--method',method,path]
+              if body is not None: command+=['--input','-']
+              r=subprocess.run(command,input=json.dumps(body) if body is not None else None,text=True,capture_output=True)
+              if r.returncode:
+                  if method=='GET' and '404' in r.stderr: return None
+                  raise RuntimeError(r.stderr)
+              return json.loads(r.stdout)
+          for p in [pathlib.Path('dist/ChitChat-Bluefy.zip'),*sorted(pathlib.Path('dist/web-ui').glob('*.png'))]:
+              endpoint=f'repos/{repo}/contents/downloads/'+urllib.parse.quote(p.name,safe='')
+              previous=api('GET',endpoint+'?ref='+urllib.parse.quote(branch,safe=''))
+              body={'message':'Publish tested Bluefy client and synthetic browser previews','branch':branch,'content':base64.b64encode(p.read_bytes()).decode()}
+              if previous: body['sha']=previous['sha']
+              api('PUT',endpoint,body); print('Published',p.name,flush=True)
+          PY
