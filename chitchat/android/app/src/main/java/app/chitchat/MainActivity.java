@@ -133,7 +133,7 @@ public final class MainActivity extends Activity implements BleLink.Listener {
                 link.sendThen(session.seal(new JSONObject().put("t","declined").toString()),()->{ if(active && epoch==e) showDeclined(); });
                 main.postDelayed(()->{ if(active && epoch==e && declinedResult) showDeclined(); },3000);
             } else if(t.equals("declined")) {
-                consent.receiveDeclineAck(); if(!pendingReopen) throw new IllegalStateException(); begin("host");
+                consent.receiveDeclineAck(); if(!pendingReopen) throw new IllegalStateException(); reopenRoom();
             } else if(t.equals("message")) {
                 consent.requireChat(); if(!chatting) throw new IllegalArgumentException(); String id=o.getString("id"), content=o.getString("text"); UUID.fromString(id);
                 if(content.trim().isEmpty() || content.getBytes(StandardCharsets.UTF_8).length>1000 || received.size()>=500) throw new IllegalArgumentException();
@@ -157,6 +157,11 @@ public final class MainActivity extends Activity implements BleLink.Listener {
         catch(Exception e) { begin("host"); }
     }
     private void showDeclined() { leave(); new AlertDialog.Builder(this).setTitle("Request declined").setMessage("The room owner declined your request. You can try another room.").setPositiveButton("OK",null).show(); }
+    private void reopenRoom() {
+        int e=epoch; link.stop(); if(requestDialog!=null) requestDialog.dismiss(); requestDialog=null;
+        status("Your room is reopening…");
+        main.postDelayed(()->{ if(active && hosting && epoch==e) begin("host"); },250);
+    }
     private void maybeChat() {
         if(consent==null || !consent.canChat()) return;
         if(chatting) return; chatting=true; base("conversation"); space(body,16);
@@ -201,8 +206,12 @@ public final class MainActivity extends Activity implements BleLink.Listener {
     private void closeWith(String reason) { leave(); new AlertDialog.Builder(this).setTitle("Room closed").setMessage(reason+"\n\nThis session's messages have been cleared.").setPositiveButton("OK",null).show(); }
     @Override public void closed(String reason) {
         if(declinedResult) { showDeclined(); return; }
-        if(hosting && active && consent!=null && !consent.canChat()) { try { if(link.enabled()) { begin("host"); return; } } catch(Exception ignored) {} }
+        if(hosting && active && consent!=null && !consent.canChat()) { try { if(link.enabled()) { reopenRoom(); return; } } catch(Exception ignored) {} }
         closeWith(reason);
+    }
+    @Override public void disconnected(String reason) {
+        if(hosting && active && !chatting) { try { if(link.enabled()) { reopenRoom(); return; } } catch(Exception ignored) {} }
+        closed(reason);
     }
     private void confirmLeave() { new AlertDialog.Builder(this).setTitle("Leave this room?").setMessage("The connection will close and this phone's messages will disappear.").setPositiveButton("Leave",(d,w)->leave()).setNegativeButton("Stay",null).show(); }
     @Override public void onBackPressed() { if(active) confirmLeave(); else super.onBackPressed(); }

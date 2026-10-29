@@ -15,7 +15,7 @@ public final class BleLink {
     public static final UUID TX=UUID.fromString("c17c0003-5a7e-4c10-8a21-6d6573680001");
     public static final UUID CCC=UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
     public interface Listener {
-        void status(String s); void found(String id,String title); void connected(); void packet(byte[] p); void closed(String reason);
+        void status(String s); void found(String id,String title); void connected(); void packet(byte[] p); void closed(String reason); void disconnected(String reason);
     }
     private final Context context; private final Listener listener; private final Handler main=new Handler(Looper.getMainLooper());
     private final BluetoothAdapter adapter; private BluetoothGattServer server; private BluetoothGatt client;
@@ -128,7 +128,7 @@ public final class BleLink {
                 if(remote!=null && !remote.equals(d)) { server.cancelConnection(d); return; }
                 remote=d; try { adapter.getBluetoothLeAdvertiser().stopAdvertising(advertiseCallback); } catch(Exception ignored) {}
                 listener.status("Friend connected. Setting up…"); watchdog(20000,"Your friend couldn't finish connecting. Open a new room.");
-            } else if(state==BluetoothProfile.STATE_DISCONNECTED && d.equals(remote)) fail("Your friend disconnected. Open a new room to reconnect.");
+            } else if(state==BluetoothProfile.STATE_DISCONNECTED && d.equals(remote)) peerDisconnected("Your friend disconnected. Open a new room to reconnect.");
         }); }
         @Override public void onDescriptorReadRequest(BluetoothDevice d,int requestId,int offset,BluetoothGattDescriptor descriptor) { main.post(()->{
             if(server!=null) server.sendResponse(d,requestId,offset==0?BluetoothGatt.GATT_SUCCESS:BluetoothGatt.GATT_INVALID_OFFSET,offset,ready?BluetoothGattDescriptor.ENABLE_INDICATION_VALUE:BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);
@@ -151,7 +151,8 @@ public final class BleLink {
         @Override public void onServiceChanged(BluetoothGatt g) { main.post(()->{ if(g==client && running) fail("The room closed or changed. Find a new room to reconnect."); }); }
         @Override public void onConnectionStateChange(BluetoothGatt g,int status,int state) { main.post(()->{
             if(g!=client || !running) return;
-            if(status!=BluetoothGatt.GATT_SUCCESS || state==BluetoothProfile.STATE_DISCONNECTED) { fail("Bluetooth disconnected. Keep both apps open and reconnect."); return; }
+            if(state==BluetoothProfile.STATE_DISCONNECTED) { peerDisconnected("Bluetooth disconnected. Keep both apps open and reconnect."); return; }
+            if(status!=BluetoothGatt.GATT_SUCCESS) { fail("Bluetooth couldn't connect. Keep both apps open and try again."); return; }
             if(state==BluetoothProfile.STATE_CONNECTED) { g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH); if(!g.discoverServices()) fail("Couldn't discover the room service."); }
         }); }
         @Override public void onServicesDiscovered(BluetoothGatt g,int status) { main.post(()->{
@@ -178,4 +179,5 @@ public final class BleLink {
         remote=null; tx=null; rx=null; afterSend=null; outgoing.clear(); early.clear(); decoder.reset(); devices.clear(); hosting=false;
     }
     private void fail(String reason) { stop(); listener.closed(reason); }
+    private void peerDisconnected(String reason) { stop(); listener.disconnected(reason); }
 }
