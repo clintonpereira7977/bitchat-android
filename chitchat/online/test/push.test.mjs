@@ -8,7 +8,7 @@ test('notifications stay disabled until Firebase credentials are configured', as
   assert.deepEqual(await sendPush({}, 'synthetic-push-token', 'inbox', fetcher), { sent: false, configured: false });
   assert.equal((await sendPush({ FCM_SERVICE_ACCOUNT_JSON: 'invalid-json' }, 'synthetic-push-token', 'inbox', fetcher)).sent, false); assert.equal(calls.length, 0);
 });
-test('push uses generic notification text, caches OAuth safely, and never includes message ciphertext or plaintext', async () => {
+test('push uses data-only hints, caches OAuth safely, and never includes message ciphertext or plaintext', async () => {
   invalidatePushCache();
   const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
   const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
@@ -25,7 +25,8 @@ test('push uses generic notification text, caches OAuth safely, and never includ
   assert.equal((await sendPush(env, 'synthetic-push-token', 'requests', fetcher, now + 1000)).sent, true);
   assert.equal(calls.filter(c => c.url === 'https://oauth2.googleapis.com/token').length, 1);
   const notification = JSON.parse(calls[1].options.body).message;
-  assert.deepEqual(notification.data, { kind: 'inbox' }); assert.equal(notification.notification.body, 'A new message is waiting.');
+  assert.deepEqual(notification.data, { kind: 'inbox' }); assert.equal(notification.notification, undefined);
+  assert.deepEqual(Object.keys(notification).sort(), ['android', 'data', 'token']);
   assert.equal(notification.android.ttl, '86400s'); assert.equal(notification.android.collapse_key, 'chitchat-inbox');
   assert.ok(!calls[1].options.body.includes('private_key')); assert.ok(!calls[1].options.body.includes('envelope'));
   assert.equal(calls[1].options.headers.Authorization, 'Bearer synthetic-oauth-token');

@@ -29,7 +29,10 @@ export async function sendPush(env, token, kind, fetcher = fetch, now = Date.now
     const bearer = await accessToken(env.FCM_SERVICE_ACCOUNT_JSON, fetcher, now);
     const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(cached.project)}/messages:send`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + bearer }, signal: AbortSignal.timeout(5000),
-      body: JSON.stringify({ message: { token, notification: { title: 'ChitChat', body: kind === 'requests' ? 'You have a new chat request.' : kind === 'contacts' ? 'Your connection request has an update.' : 'A new message is waiting.' }, data: { kind }, android: { priority: 'high', ttl: '86400s', collapse_key: 'chitchat-inbox' } } })
+      // Data-only hints let the app recheck Online consent before displaying a
+      // locally generated generic notification. Provider-rendered notification
+      // payloads can bypass that check while Android has backgrounded the app.
+      body: JSON.stringify({ message: { token, data: { kind }, android: { priority: 'high', ttl: '86400s', collapse_key: 'chitchat-inbox' } } })
     });
     if (response.status === 401) invalidatePushCache();
     // A provider accepting a request is not proof that a notification was shown.

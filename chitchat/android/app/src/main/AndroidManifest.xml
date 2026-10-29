@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -7,6 +9,16 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <application android:theme="@style/AppTheme" android:label="ChitChat" android:icon="@drawable/icon" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="false">
+        <!-- No FCM registration, installation identifier or Analytics collection
+             on first launch. Online opt-in must explicitly request a token. -->
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+        <meta-data android:name="firebase_data_collection_default_enabled" android:value="false" />
+        <meta-data android:name="delivery_metrics_exported_to_big_query_enabled" android:value="false" />
+        <meta-data android:name="firebase_messaging_notification_delegation_enabled" android:value="false" />
+        <service android:name=".ChitChatMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
         <provider android:name=".ApkProvider" android:authorities="app.chitchat.apk" android:exported="false" android:grantUriPermissions="true" />
         <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
