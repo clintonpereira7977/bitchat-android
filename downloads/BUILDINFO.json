@@ -1,10 +1,13 @@
 {
   "app": "ChitChat",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "protocol": "ChitChat/v2",
   "androidPackage": "app.chitchat",
   "minimumAndroid": "8.0",
-  "testedAppCommit": "dd0b94ffb7dfd114f727622e795914cd3a8dc110",
-  "successfulWorkflowRun": 40813444408,
-  "apkSHA256": "ec8dc2e6ddbbdacc36077fb780a91624d16f7029b41a06b7d7d942ed4e02e4fa",
-  "verification": "Android native UI, paired emulator BLE messaging, Java/Python protocol checks, Swift/CryptoKit checks, and iOS simulator compile passed. Physical phones and Apple signing not verified."
+  "sourceCommit": "50f39ff8bec052ab437c46c8e4fc5f41f654c23d",
+  "workflowRun": "40818324325",
+  "nativeRuntimeChecks": "failure",
+  "apkSHA256": "b4dd26b33e2df32316118646c9c580aaac85624cde01c633617b5a19f8182956",
+  "identity": "Connection approval does not authenticate a person's identity.",
+  "physicalPhonesVerified": false
 }
