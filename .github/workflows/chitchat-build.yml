@@ -11,6 +11,8 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 20
     defaults:
       run:
@@ -30,7 +32,8 @@ jobs:
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - run: bash scripts/test.sh
       - run: gradle -p android --no-daemon assembleDebug
-      - run: |
+      - id: package
+        run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/debug/app-debug.apk dist/ChitChat-android.apk
           sha256sum dist/ChitChat-android.apk > dist/SHA256SUMS.txt
@@ -61,6 +64,11 @@ jobs:
           name: ChitChat-Android-Screens
           path: chitchat/dist/ui/*.png
           if-no-files-found: ignore
+      - name: Publish installer and synthetic previews
+        if: ${{ always() && steps.package.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-downloads.py
   ios-compile:
     runs-on: macos-14
     timeout-minutes: 20

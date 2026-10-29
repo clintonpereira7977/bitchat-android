@@ -25,6 +25,7 @@ def tap(entry):
     if entry is None:
         raise AssertionError("Expected a visible control")
     x1, y1, x2, y2 = map(int, re.findall(r"\d+", entry.get("bounds", "")))
+    print("TAP", entry.get("text", ""), entry.get("content-desc", ""), entry.get("bounds", ""), flush=True)
     adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
     time.sleep(0.6)
 
@@ -34,6 +35,8 @@ def wait_for(text):
         if node(view, text) is not None:
             return view
         time.sleep(0.5)
+    snapshot("failure")
+    print("CI_SCREEN_STATE", ET.tostring(view, encoding="unicode"), flush=True)
     raise AssertionError("Expected visible text: " + text)
 
 def snapshot(name):
