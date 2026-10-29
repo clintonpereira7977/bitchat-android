@@ -8,7 +8,7 @@ project.mkdir(exist_ok=True)
 def uid(name): return hashlib.sha256(name.encode()).hexdigest()[:24].upper()
 objects = []
 def add(name, value): objects.append(f'\t\t{uid(name)} = {{ {value} }};')
-files = ['ChitChatApp.swift', 'ContentView.swift', 'ChatModel.swift', 'SessionCrypto.swift']
+files = ['ChitChatApp.swift', 'ContentView.swift', 'ChatModel.swift', 'SessionCrypto.swift', 'ConsentGate.swift']
 for file in files:
     add('file:'+file, f'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {file}; sourceTree = "<group>";')
     add('build:'+file, f'isa = PBXBuildFile; fileRef = {uid("file:"+file)};')
@@ -25,7 +25,7 @@ add('sources', f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files
 add('frameworks', 'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
 add('resources', f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({uid("assets-build")},); runOnlyForDeploymentPostprocessing = 0;')
 common = 'CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0;'
-target = 'ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = ChitChat/Info.plist; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = app.chitchat.local; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; TARGETED_DEVICE_FAMILY = 1; SWIFT_EMIT_LOC_STRINGS = YES;'
+target = 'ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 2; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = ChitChat/Info.plist; MARKETING_VERSION = 0.2.0; PRODUCT_BUNDLE_IDENTIFIER = app.chitchat.local; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; TARGETED_DEVICE_FAMILY = 1; SWIFT_EMIT_LOC_STRINGS = YES;'
 for scope in ['project', 'target']:
     for config in ['Debug', 'Release']:
         extra = 'SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;' if config == 'Debug' else 'SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O";'

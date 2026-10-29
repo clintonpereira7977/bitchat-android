@@ -17,10 +17,15 @@ class Device:
     def screen(self):
         self.adb("shell", "uiautomator", "dump", "/sdcard/chitchat-pair.xml")
         return ET.fromstring(self.adb("shell", "cat", "/sdcard/chitchat-pair.xml"))
-    def wait(self, text, seconds=40):
+    def wait(self, text, seconds=40, recover_launcher=False):
         end = time.monotonic() + seconds
         while time.monotonic() < end:
             root = self.screen()
+            labels = [n.get("text", "") for n in root.iter("node")]
+            if recover_launcher and any("Pixel Launcher" in value and "responding" in value for value in labels):
+                self.tap(root, "Close app")
+                self.adb("shell", "am", "start", "-W", "-n", "app.chitchat/.MainActivity")
+                continue
             if any(text.casefold() in n.get("text", "").casefold() for n in root.iter("node")):
                 return root
             time.sleep(0.5)
@@ -44,13 +49,13 @@ class Device:
             self.adb("shell", "pm", "grant", "app.chitchat", "android.permission." + permission)
         self.adb("shell", "svc", "bluetooth", "enable")
         self.adb("shell", "am", "start", "-W", "-n", "app.chitchat/.MainActivity")
-        root = self.wait("What should we call you?")
+        root = self.wait("What should we call you?", seconds=60, recover_launcher=True)
         self.tap(root, "Later")
         self.wait("Open a room")
     def enter(self, message):
         root = self.screen()
         field = next((n for n in root.iter("node") if n.get("class") == "android.widget.EditText"), None)
-        assert field is not None, "Verified conversation composer required"
+        assert field is not None, "Accepted conversation composer required"
         x1,y1,x2,y2 = map(int,re.findall(r"\d+",field.get("bounds", "")))
         self.adb("shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2))
         for start in range(0, len(message), 40):
@@ -69,7 +74,7 @@ assert host.adb("shell", "getprop", "ro.kernel.qemu").strip() == "1"
 subprocess.run(["avdmanager", "create", "avd", "--force", "--name", "chitchat_peer", "--package", "system-images;android-35;google_apis;x86_64", "--device", "pixel_6"], input="no\n", text=True, check=True, stdout=subprocess.DEVNULL)
 with open("dist/peer-emulator.log", "w") as log:
     emulator_binary = str(Path(os.environ["ANDROID_HOME"]) / "emulator/emulator")
-    process = subprocess.Popen([emulator_binary, "-avd", "chitchat_peer", "-port", "5556", "-no-window", "-gpu", "swiftshader_indirect", "-no-snapshot", "-noaudio", "-no-boot-anim", "-memory", "2048", "-cores", "2"], stdout=log, stderr=log)
+    process = subprocess.Popen([emulator_binary, "-avd", "chitchat_peer", "-port", "5556", "-no-window", "-gpu", "swiftshader_indirect", "-no-snapshot", "-noaudio", "-no-boot-anim", "-memory", "3072", "-cores", "2"], stdout=log, stderr=log)
     try:
         end = time.monotonic() + 240
         while time.monotonic() < end:
@@ -87,28 +92,52 @@ with open("dist/peer-emulator.log", "w") as log:
         for key in ["window_animation_scale", "transition_animation_scale", "animator_duration_scale"]:
             guest.adb("shell", "settings", "put", "global", key, "0")
         host.prepare(); guest.prepare()
+        def no_composer(root):
+            return not any(n.get("class") == "android.widget.EditText" or "BLUETOOTH · ENCRYPTED" in n.get("text", "") for n in root.iter("node"))
+        def opened_room():
+            root = host.wait("is open.")
+            room = re.search(r"Room ([0-9A-F]{4}) is open", " ".join(n.get("text", "") for n in root.iter("node")))
+            assert room, "Host must advertise a room"
+            return room.group(1)
+        def request(room):
+            guest.tap(guest.screen(), "Find a friend")
+            end = time.monotonic() + 28
+            while time.monotonic() < end:
+                root = guest.screen()
+                label = next((n.get("text", "") for n in root.iter("node") if ("Room " + room) in n.get("text", "") or "Nearby ChitChat room" in n.get("text", "")), None)
+                if label:
+                    guest.tap(root, label)
+                    break
+                time.sleep(0.5)
+            else:
+                raise AssertionError("Guest did not discover the native BLE room")
+            owner = host.wait("Connection request")
+            requester = guest.wait("Request sent.")
+            assert no_composer(owner) and no_composer(requester), "Chat must remain locked until owner approval"
+            return owner, requester
         host.tap(host.screen(), "Open a room")
-        opened = host.wait("is open.")
-        room = re.search(r"Room ([0-9A-F]{4}) is open", " ".join(n.get("text", "") for n in opened.iter("node")))
-        assert room, "Host must advertise a room"
-        guest.tap(guest.screen(), "Find a friend")
-        end = time.monotonic() + 28
-        while time.monotonic() < end:
-            root = guest.screen()
-            label = next((n.get("text", "") for n in root.iter("node") if ("Room " + room.group(1)) in n.get("text", "") or "Nearby ChitChat room" in n.get("text", "")), None)
-            if label:
-                guest.tap(root, label)
-                break
-            time.sleep(0.5)
-        else:
-            raise AssertionError("Guest did not discover the native BLE room")
-        a = host.wait("Same little secret?")
-        b = guest.wait("Same little secret?")
-        def code(root):
-            return re.search(r"\b[0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4}\b", " ".join(n.get("text", "") for n in root.iter("node"))).group(0)
-        assert code(a) == code(b), "Native BLE verification codes must match"
-        host.tap(a, "Codes match"); guest.tap(b, "Codes match")
-        host.wait("BLUETOOTH · VERIFIED"); guest.wait("BLUETOOTH · VERIFIED")
+        # Cancelling a pending request does not open a chat and restores the host's room.
+        request(opened_room())
+        guest.tap(guest.screen(), "Cancel request")
+        guest.wait("Open a room")
+        host.wait("Room for two.")
+        # Decline explicitly closes the request; the host stays available.
+        owner, requester = request(opened_room())
+        host.tap(owner, "Decline")
+        declined = guest.wait("Request declined")
+        assert no_composer(declined), "A declined request cannot create a conversation"
+        guest.tap(declined, "OK")
+        guest.wait("Open a room")
+        host.wait("Room for two.")
+        # One tap by the owner is enough; the requester never compares a code.
+        owner, requester = request(opened_room())
+        host.screenshot("05-connection-request"); guest.screenshot("06-request-pending")
+        host.tap(owner, "Accept")
+        a = host.wait("BLUETOOTH · ENCRYPTED"); b = guest.wait("BLUETOOTH · ENCRYPTED")
+        for root in [a,b]:
+            visible = " ".join(n.get("text", "") for n in root.iter("node"))
+            assert "VERIFIED" not in visible and "Codes match" not in visible
+            assert not re.search(r"\b[0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4}\b", visible), "No manual verification code in the approval flow"
         guest.enter("hello-from-guest")
         message = "hello-from-host-" + "fragment" * 6
         host.send(message)
@@ -125,7 +154,7 @@ with open("dist/peer-emulator.log", "w") as log:
         guest.tap(guest.screen(), "Leave")
         guest.tap(guest.wait("Leave this room?"), "Leave")
         host.wait("Room closed")
-        print("PASS: native BLE advertising, discovery, GATT connection, matching verification, bidirectional fragmented encrypted messages, delivery acknowledgments, disconnect cleanup", flush=True)
+        print("PASS: native BLE requests, no chat before approval, cancellation, decline, automatic room reopening, one-tap acceptance, bidirectional encrypted messages, delivery acknowledgments, draft preservation and disconnect cleanup", flush=True)
     except Exception:
         for device, name in [(host, "pair-failure-host"), (guest, "pair-failure-guest")]:
             try:

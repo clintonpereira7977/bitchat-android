@@ -1,4 +1,4 @@
-# ChitChat protocol v1
+# ChitChat protocol v2
 
 Direct, single-peer BLE; no network stack or mesh relay. The host is a GATT peripheral; the guest is a GATT central. All UUIDs use 128-bit form.
 
@@ -23,28 +23,34 @@ Bit 0 = start; bit 1 = end; other bits must be zero. Sequence starts at zero for
 
 ## Handshake and encryption
 
-1. Each connection creates a fresh P-256 ECDH key pair. The hello packet is `01 || uncompressed-public-key-65-bytes` (ANSI X9.63, leading `04`). No nickname in hello. Duplicate and reflected hello packets are rejected.
+1. Each connection creates a fresh P-256 ECDH key pair. The hello packet is `03 || uncompressed-public-key-65-bytes` (ANSI X9.63, leading `04`). No nickname in hello. Duplicate and reflected hello packets are rejected.
 2. Validate and import the peer public key using the platform crypto implementation. Derive the 32-byte ECDH shared secret.
 3. Sort the two raw public keys in unsigned lexicographic order. `salt = SHA256(low_public || high_public)`.
-4. `master = HKDF-SHA256(shared_secret, salt, info="ChitChat/v1/session", outputLength=32)`.
-5. Derive directional AES keys: `low_to_high = HMAC-SHA256(master, "ChitChat/v1/low-to-high")`; `high_to_low = HMAC-SHA256(master, "ChitChat/v1/high-to-low")`. A sender chooses according to its public key's position. Separate keys reject packet reflection.
-6. Display the first six bytes of `SHA256(master)` as 12 uppercase hex characters in groups of four. Both users must compare every character through a trusted physical/verbal channel and approve. The code authenticates this session, not a stored identity.
-7. Encrypted packet: `02 || random-nonce-12 || ciphertext || GCM-tag-16`. AES-256-GCM with AAD UTF-8 `ChitChat/v1`. Android uses JCA; iOS uses CryptoKit. Directional received-nonce sets reject replay. Session limit: 10,000 incoming encrypted packets.
+4. `master = HKDF-SHA256(shared_secret, salt, info="ChitChat/v2/session", outputLength=32)`.
+5. Derive directional AES keys: `low_to_high = HMAC-SHA256(master, "ChitChat/v2/low-to-high")`; `high_to_low = HMAC-SHA256(master, "ChitChat/v2/high-to-low")`. A sender chooses according to its public key's position. Separate keys reject packet reflection.
+6. An internal fingerprint of the master key remains available for crypto test vectors; it is not displayed or compared by users. There is no manual identity-authentication step in version 2.
+7. Encrypted packet: `02 || random-nonce-12 || ciphertext || GCM-tag-16`. AES-256-GCM with AAD UTF-8 `ChitChat/v2`. Android uses JCA; iOS uses CryptoKit. Directional received-nonce sets reject replay. Session limit: 10,000 incoming encrypted packets.
 
-Encrypted plaintext is UTF-8 JSON:
+Encrypted plaintext is UTF-8 JSON. Consent follows this ordered flow:
 
 ```json
-{"t":"approve","name":"Sweet Tooth"}
+{"t":"request","name":"Sweet Tooth"}
+{"t":"accept","name":"Room owner"}
+{"t":"ready"}
 {"t":"message","id":"UUID","text":"Hello 👋"}
 {"t":"ack","id":"same-UUID"}
 ```
 
-Only `approve` is accepted until both local and remote approvals exist. Text length is bounded to 1,000 UTF-8 bytes. Sessions are capped at about 500 retained messages and eight unconfirmed sends. Acknowledgment means the receiving app accepted the message into volatile UI state. It does not prove that a person read it or persisted it. Lost acknowledgments produce “unconfirmed”; the app does not resend automatically.
+Selecting Connect is the requester's consent. The host accepts a single request only after its local user taps Accept, and then waits for `ready`. The requester opens chat only after receiving `accept`, and queues `ready` before any messages. The host does not accept `ready` before local acceptance. Role-bound state machines reject duplicate, early and wrong-role control messages; neither UI nor message handling permits chat without acceptance.
 
-Verification expires after 180 seconds. Disconnect, Bluetooth loss, invalid packets or foreground loss close the room. New sessions generate new keys and codes; no identity pinning, reconnection resumption or offline queue.
+Declining sends `{"t":"decline"}`; the requester replies `{"t":"declined"}` and closes the link. The host reopens a fresh room after acknowledgment/disconnection, with a three-second fallback. Cancelling a pending request disconnects without creating a chat. Pending requests expire after 180 seconds.
+
+Nicknames are shared by the requester on request and by the host on acceptance. They are unverified display names. Text remains bounded to 1,000 UTF-8 bytes; sessions cap retained messages and pending sends. Acknowledgments mean app receipt, not human reading or persistence. Lost acknowledgments become unconfirmed, without automatic resend.
+
+Version 2 uses hello marker `03` and version-2 key derivation/AAD labels. Version-1 code-matching builds are incompatible: both phones must be updated.
 
 ## Security boundary
 
-This is an original, unaudited application protocol using platform cryptography. A passive observer can see BLE advertisements, connection metadata, lengths and timing. A nearby active attacker can disrupt connectivity. A man-in-the-middle attack is not excluded unless both users compare the full code correctly. There is no trusted directory, stored identity, account recovery, forward-secure message ratchet, or independent audit. Fresh ephemeral connection keys prevent simply decrypting old sessions using a future session's keys, but do not protect compromised devices or retained process memory. Java key arrays are zeroed where possible; runtime and CryptoKit memory lifetime is managed by the platform.
+This is an original, unaudited application protocol using platform cryptography. A passive observer can see BLE advertisements, connection metadata, lengths and timing. A nearby active attacker can disrupt connectivity. Approval is access control, not cryptographic identity authentication. Without manual fingerprint comparison, an active man-in-the-middle can establish separate encrypted sessions and impersonate nicknames. Only accept expected requests. Encryption still protects passive observers, subject to the cryptographic implementation’s security. There is no trusted directory, stored identity, account recovery, forward-secure message ratchet, or independent audit. Fresh ephemeral connection keys prevent simply decrypting old sessions using a future session's keys, but do not protect compromised devices or retained process memory. Java key arrays are zeroed where possible; runtime and CryptoKit memory lifetime is managed by the platform.
 
 No transport names or encrypted-message claims imply compatibility with BitChat. No code or services from that app are used.

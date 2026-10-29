@@ -20,10 +20,10 @@ struct ContentView: View {
             else { waiting }
         }
         .padding(.horizontal, 22).padding(.bottom, 12).background(Color.black).foregroundStyle(.white)
-        .alert("Same little secret?", isPresented: $model.verification) {
-            Button("Codes match") { model.approve() }
-            Button("Disconnect", role: .destructive) { model.leave() }
-        } message: { Text("Compare this code on both phones:\n\n\(model.code)\n\nOnly tap Match if every character is identical.") }
+        .alert("Connection request", isPresented: $model.incomingRequest) {
+            Button("Accept") { model.acceptRequest() }
+            Button("Decline", role: .cancel) { model.declineRequest() }
+        } message: { Text("\(model.friend) wants to chat.\n\nOnly accept a request you're expecting. Nicknames aren't verified identities.") }
         .alert("ChitChat", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
@@ -63,18 +63,18 @@ struct ContentView: View {
     }
     private var waiting: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(model.page == "host" ? "Room for two." : "Who's around?").font(.system(size: 36, weight: .light)).padding(.top, 30)
+            Text(model.page == "host" ? "Room for two." : (model.requestSent ? "Request sent." : (model.requestPending ? "Connecting…" : "Who's around?"))).font(.system(size: 36, weight: .light)).padding(.top, 30)
             Text(model.status).font(.system(size: 16)).foregroundStyle(dim)
             Text("( (  ·  ) )").font(.system(size: 32, design: .monospaced)).padding(.vertical, 14)
-            ScrollView { VStack(spacing: 12) { ForEach(model.rooms) { room in action(room.title + "     →") { model.join(room) } } } }
-            if model.page == "find" { action("Search again") { model.start("find") } }
-            action("Back home") { model.leave() }
+            ScrollView { VStack(spacing: 12) { ForEach(model.rooms) { room in action(room.title + "     Connect →") { model.join(room) }.disabled(model.requestPending) } } }
+            if model.page == "find" && !model.requestPending { action("Search again") { model.start("find") } }
+            action(model.requestPending ? "Cancel request" : "Back home") { model.leave() }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var conversation: some View {
         VStack(spacing: 0) {
             HStack { Text(model.friend).font(.system(size: 26)); Spacer(); Button("Leave") { leaving = true }.padding(16).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(white: 0.27))) }.padding(.vertical, 16)
-            Text("BLUETOOTH · VERIFIED · \(model.code)").font(.system(size: 10, design: .monospaced)).foregroundStyle(dim).frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 14)
+            Text("BLUETOOTH · ENCRYPTED").font(.system(size: 10, design: .monospaced)).foregroundStyle(dim).frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 14)
             Divider()
             ScrollViewReader { proxy in
                 ScrollView {
@@ -104,7 +104,7 @@ struct ContentView: View {
     }
     private var helpView: some View {
         NavigationStack {
-            ScrollView { Text("1. Both install ChitChat and turn on Bluetooth.\n2. One opens a room; the other finds it.\n3. Compare the code, then both tap Match.\n4. Chat nearby with both apps on screen.\n\nNo internet, account, contacts, or server. Direct Bluetooth only: no mesh, long-distance delivery, photos, or calls.\n\nText is encrypted in transit after verification. Messages stay in memory and disappear when you leave or the app closes. Your keyboard and phone can still retain data.\n\nStart within 1–2 metres. Range varies by phone and obstacles. This version disconnects when backgrounded.\n\nChitChat uses its own protocol and doesn't connect to BitChat.").padding(24) }
+            ScrollView { Text("1. Both install the latest ChitChat and turn on Bluetooth.\n2. One opens a room; the other taps Connect to send a request.\n3. The room owner taps Accept or Decline. Accept opens the chat on both phones.\n4. Chat nearby with both apps on screen.\n\nNo internet, account, contacts, or server. Direct Bluetooth only: no mesh, long-distance delivery, photos, or calls.\n\nMessages are encrypted. Approval gives permission to chat; it doesn't verify a person's identity. Only accept requests you expect. Messages stay in memory and disappear when you leave or the app closes. Your keyboard and phone can still retain data.\n\nStart within 1–2 metres. Range varies by phone and obstacles. This version disconnects when backgrounded.\n\nChitChat uses its own protocol and doesn't connect to BitChat.").padding(24) }
                 .navigationTitle("A little closer.").toolbar { Button("Done") { help = false } }
         }
     }

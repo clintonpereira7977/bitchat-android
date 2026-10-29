@@ -4,16 +4,16 @@
 
 ## Delivery status — read this first
 
-An installable Android APK has been built, signature-verified, and checked on an Android 15 emulator. The **Build ChitChat** workflow also compiles the iPhone project and runs its CryptoKit tests. The Android installer is published on the separate `codex/chitchat-download` branch under `downloads/ChitChat-android.apk`, and as the **ChitChat-Android-APK** workflow artifact.
+Version **0.2.0** replaces manual code matching with connection requests. Both phones need this updated version. The Android and iPhone request/approval code is implemented; the Build ChitChat workflow tracks native compilation and runtime checks. Download a verified APK only after its build succeeds.
 
-Android native checks cover launch, home actions, help, nickname persistence and permission-denial recovery. Two emulated Android phones also passed discovery, verification, encrypted messages in both directions, delivery receipts, draft preservation and disconnect cleanup. Physical phone-to-phone Bluetooth compatibility remains unverified. The iPhone app still needs Apple signing through Xcode or TestFlight before installation. See [installation](INSTALL.md) and [validation](docs/VALIDATION.md).
+The room owner sees the requester's nickname and chooses Accept or Decline. Chat stays locked until acceptance. Declining or cancelling closes the request and keeps the owner's room available. Messages remain encrypted, but nicknames are unverified; only accept requests you expect. Physical-phone compatibility remains unverified, and the iPhone project still requires Apple signing. See [installation](INSTALL.md) and [validation](docs/VALIDATION.md).
 
 ## What is implemented
 
 - Native Java / Android BLE and SwiftUI / CoreBluetooth, using a shared protocol.
 - Open a room on one phone; find and join it on the other. A room accepts one friend.
-- Compare the same 12-character verification code on both phones and approve before chatting.
-- Fresh P-256 ECDH session keys, HKDF-SHA256, directional AES-256-GCM encryption, replay rejection.
+- Send a connection request from the nearby-room list. The room owner accepts or declines; acceptance opens chat on both phones without comparing codes.
+- Fresh P-256 ECDH session keys, HKDF-SHA256, directional AES-256-GCM encryption and replay rejection. Approval controls access to chat; it does not authenticate a person’s identity.
 - Text messaging, UTF-8 / emoji, fragmentation for the default Bluetooth MTU, and receiver acknowledgments. “Delivered” means the other app received the message; it is not a read receipt.
 - Message history exists in process memory only and clears when leaving or backgrounding. Nickname is the only saved preference. The app keeps the screen awake during a room.
 - Android can share its own installed APK from the home screen using the system share sheet.

@@ -18,9 +18,10 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
     @Published var status = ""
     @Published var rooms: [NearbyRoom] = []
     @Published var messages: [ChatMessage] = []
-    @Published var code = ""
     @Published var friend = "Friend"
-    @Published var verification = false
+    @Published var incomingRequest = false
+    @Published var requestPending = false
+    @Published var requestSent = false
     @Published var error: String?
     @Published var nickname = UserDefaults.standard.string(forKey: "nickname") ?? "Sweet Tooth" {
         didSet { UserDefaults.standard.set(nickname, forKey: "nickname") }
@@ -34,12 +35,14 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
     private var tx: CBCharacteristic?
     private var hostTX: CBMutableCharacteristic?
     private var hostRX: CBMutableCharacteristic?
-    private var hosting = false, ready = false, writing = false, localApproved = false, peerApproved = false
+    private var hosting = false, ready = false, writing = false, pendingReopen = false, declinedResult = false
     private var pending = "", roomCode = "", generation = 0
     private var outgoing: [Data] = []
     private var early: [Data] = []
     private var decoder = Framing()
     private var crypto: SessionCrypto?
+    private var consent: ConsentGate?
+    private var afterSend: (() -> Void)?
     private var received = Set<String>()
     override init() {
         super.init()
@@ -79,7 +82,7 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
     }
     func join(_ room: NearbyRoom) {
         guard page == "find", peer == nil, let device = devices[room.id] else { return }
-        central.stopScan(); peer = device; device.delegate = self; status = "Connecting…"
+        central.stopScan(); requestPending = true; peer = device; device.delegate = self; status = "Sending a connection request…"
         central.connect(device, options: nil)
         timeout(20, "Connection timed out. Move closer and try again.") { !$0.ready }
     }
@@ -106,7 +109,7 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
         if peripheral === peer { fail("Couldn't connect. Ask your friend to open a new room.") }
     }
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        if peripheral === peer { fail("Your friend disconnected. Keep both apps open and reconnect.") }
+        if peripheral === peer { disconnected("Your friend disconnected. Keep both apps open and reconnect.") }
     }
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard peripheral === peer else { return }
@@ -152,7 +155,7 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
         subscriber = central; peripheralManager.stopAdvertising(); established()
     }
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
-        if characteristic === hostTX, subscriber?.identifier == central.identifier { fail("Your friend disconnected. Open a new room to reconnect.") }
+        if characteristic === hostTX, subscriber?.identifier == central.identifier { disconnected("Your friend disconnected. Open a new room to reconnect.") }
     }
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         // Respond once per CoreBluetooth write batch, reject the entire batch if malformed.
@@ -164,9 +167,9 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) { pump() }
     private func established() {
         guard !ready else { return }; ready = true; status = "Checking your connection…"
-        crypto = SessionCrypto(); sendRaw(crypto!.hello)
+        crypto = SessionCrypto(); consent = ConsentGate(hosting: hosting); sendRaw(crypto!.hello)
         let buffered = early; early = []; for fragment in buffered { if ready { receive(fragment) } }
-        timeout(180, "Verification timed out. Start a new room when you're both ready.") { $0.page != "chat" }
+        timeout(180, "The connection request expired. Try again when you're both ready.") { $0.page != "chat" }
     }
     private func sendRaw(_ packet: Data) {
         do {
@@ -181,12 +184,14 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
     }
     private func pump() {
         guard ready, !writing else { return }
+        if outgoing.isEmpty { let completion = afterSend; afterSend = nil; completion?(); return }
         if hosting {
             guard let hostTX, let subscriber else { return }
             while let frame = outgoing.first {
                 if !peripheralManager.updateValue(frame, for: hostTX, onSubscribedCentrals: [subscriber]) { return }
                 outgoing.removeFirst()
             }
+            if outgoing.isEmpty { let completion = afterSend; afterSend = nil; completion?() }
         } else if let peer, let rx, let frame = outgoing.first {
             writing = true; peer.writeValue(frame, for: rx, type: .withResponse)
             let g = generation
@@ -203,37 +208,80 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
             return
         }
         do {
-            guard let packet = try decoder.accept(fragment), let crypto else { return }
-            if packet.first == 1 { code = try crypto.receiveHello(packet); verification = true; return }
+            guard let packet = try decoder.accept(fragment), let crypto, let consent else { return }
+            if packet.first == 1 { fail("Install the latest ChitChat on both phones to use connection requests."); return }
+            if packet.first == 3 {
+                _ = try crypto.receiveHello(packet); try consent.keysReady()
+                if hosting { status = "Waiting for a connection request…" }
+                else { requestSent = true; rooms = []; status = "Waiting for the room owner to accept…"; try send(["t": "request", "name": localName]) }
+                return
+            }
             let o = try crypto.open(packet)
             switch o["t"] {
-            case "approve":
-                guard !peerApproved, let name = o["name"] else { throw ChatError.invalid("Duplicate approval") }
-                peerApproved = true; friend = String(name.filter { !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }.prefix(24))
-                if friend.isEmpty { friend = "Friend" }; maybeChat()
+            case "request":
+                try consent.receiveRequest()
+                guard let name = o["name"] else { throw ChatError.invalid("Missing nickname") }
+                friend = safeName(name); status = "Connection request from \(friend)."; incomingRequest = true
+            case "accept":
+                try consent.receiveAcceptance()
+                guard let name = o["name"] else { throw ChatError.invalid("Missing nickname") }
+                friend = safeName(name); try send(["t": "ready"]); maybeChat()
+            case "ready":
+                try consent.receiveReady(); maybeChat()
+            case "decline":
+                try consent.receiveDecline(); declinedResult = true
+                let g = generation
+                afterSend = { [weak self] in guard let self, self.generation == g else { return }; self.showDeclined() }
+                try send(["t": "declined"])
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                    guard let self, self.generation == g, self.declinedResult else { return }; self.showDeclined()
+                }
+            case "declined":
+                try consent.receiveDeclineAck()
+                guard pendingReopen else { throw ChatError.invalid("Unexpected decline acknowledgment") }
+                start("host")
             case "message":
+                try consent.requireChat()
                 guard page == "chat", let id = o["id"], UUID(uuidString: id) != nil, let text = o["text"], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 1000, received.count < 500 else { throw ChatError.invalid("Invalid message") }
                 if received.insert(id).inserted { messages.append(ChatMessage(id: id, text: text, own: false, receipt: Date().formatted(date: .omitted, time: .shortened))) }
                 try send(["t": "ack", "id": id])
             case "ack":
-                guard page == "chat" else { throw ChatError.invalid("Not verified") }
+                try consent.requireChat()
+                guard page == "chat" else { throw ChatError.invalid("Approval required") }
                 if let i = messages.firstIndex(where: { $0.own && $0.id == o["id"] }) { messages[i].receipt = "delivered ✓" }
             default: throw ChatError.invalid("Invalid packet")
             }
-        } catch { fail("This connection couldn't be verified or a packet was invalid. Start a new room.") }
+        } catch { fail("The connection request couldn't be completed. Try again with the latest ChitChat on both phones.") }
     }
-    func approve() {
-        do { localApproved = true; try send(["t": "approve", "name": String(nickname.prefix(24))]); maybeChat() }
-        catch { fail("Couldn't verify this connection.") }
+    private var localName: String { let name = String(nickname.trimmingCharacters(in: .whitespacesAndNewlines).prefix(24)); return name.isEmpty ? "Sweet Tooth" : name }
+    private func safeName(_ value: String) -> String {
+        let name = String(value.filter { !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }.prefix(24))
+        return name.isEmpty ? "Friend" : name
     }
-    private func maybeChat() {
-        if localApproved && peerApproved { page = "chat" }
-        else { status = "Waiting for your friend to compare the code…" }
+    func acceptRequest() {
+        do {
+            guard let consent else { throw ChatError.invalid("Request unavailable") }
+            try consent.accept(); incomingRequest = false; status = "Accepted. Opening your chat…"
+            try send(["t": "accept", "name": localName])
+        } catch { fail("Couldn't accept this request. Please try again.") }
     }
+    func declineRequest() {
+        do {
+            guard let consent else { throw ChatError.invalid("Request unavailable") }
+            try consent.decline(); incomingRequest = false; pendingReopen = true
+            status = "Request declined. Reopening your room…"; try send(["t": "decline"])
+            let g = generation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self, self.generation == g, self.pendingReopen else { return }; self.start("host")
+            }
+        } catch { start("host") }
+    }
+    private func showDeclined() { leave(); error = "Request declined. The room owner declined your request. You can try another room." }
+    private func maybeChat() { if consent?.canChat == true { requestPending = false; page = "chat" } }
     func sendText(_ text: String) -> Bool {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard page == "chat", !clean.isEmpty else { return false }
-        guard clean.utf8.count <= 1000 else { error = "Keep it short: up to 1,000 UTF-8 bytes per message."; return false }
+        guard page == "chat", consent?.canChat == true, !clean.isEmpty else { return false }
+        guard clean.utf8.count <= 1000 else { error = "This message is too long. Try a shorter note."; return false }
         guard messages.count < 500, messages.filter({ $0.own && $0.receipt != "delivered ✓" }).count < 8 else { error = "Wait for delivery, or start a new room if this session is full."; return false }
         let id = UUID().uuidString
         do {
@@ -253,13 +301,18 @@ final class ChatModel: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
         }
     }
     func leave() {
-        generation += 1; pending = ""; ready = false; writing = false; verification = false
+        generation += 1; pending = ""; ready = false; writing = false; incomingRequest = false; requestPending = false; requestSent = false
         let previous = peer; peer = nil; previous?.delegate = nil
         if let previous { central?.cancelPeripheralConnection(previous) }
         central?.stopScan(); peripheralManager?.stopAdvertising(); peripheralManager?.removeAllServices()
-        subscriber = nil; hostTX = nil; hostRX = nil; rx = nil; tx = nil; crypto = nil; localApproved = false; peerApproved = false
-        outgoing = []; early = []; devices = [:]; rooms = []; messages = []; received = []; decoder = Framing(); code = ""; page = "home"
+        subscriber = nil; hostTX = nil; hostRX = nil; rx = nil; tx = nil; crypto = nil; consent = nil; afterSend = nil; pendingReopen = false; declinedResult = false
+        outgoing = []; early = []; devices = [:]; rooms = []; messages = []; received = []; decoder = Framing(); page = "home"
         UIApplication.shared.isIdleTimerDisabled = false
     }
-    private func fail(_ reason: String) { leave(); error = reason + "\n\nThis session's messages have been cleared." }
+    private func disconnected(_ reason: String) {
+        if declinedResult { showDeclined(); return }
+        if hosting, consent != nil, consent?.canChat == false { start("host"); return }
+        fail(reason)
+    }
+    private func fail(_ reason: String) { if declinedResult { showDeclined(); return }; leave(); error = reason + "\n\nThis session's messages have been cleared." }
 }

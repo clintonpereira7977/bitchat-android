@@ -23,6 +23,7 @@ public final class BleLink {
     private final ArrayDeque<byte[]> outgoing=new ArrayDeque<>(); private final Wire.Decoder decoder=new Wire.Decoder();
     private final ArrayDeque<byte[]> early=new ArrayDeque<>();
     private final Map<String,BluetoothDevice> devices=new HashMap<>();
+    private Runnable afterSend;
     private boolean hosting, running, ready, writing, scanning; private int generation; private String room;
     public BleLink(Context c,Listener l) { context=c; listener=l; BluetoothManager m=(BluetoothManager)c.getSystemService(Context.BLUETOOTH_SERVICE); adapter=m==null?null:m.getAdapter(); }
     public boolean enabled() { return adapter!=null && adapter.isEnabled(); }
@@ -64,8 +65,10 @@ public final class BleLink {
         if(outgoing.size()+parts.size()>512) { fail("Bluetooth queue is full. Reconnect and send again."); return; }
         outgoing.addAll(parts); pump();
     }
+    public void sendThen(byte[] p,Runnable action) { afterSend=action; send(p); }
     private void pump() {
-        if(!running || !ready || writing || outgoing.isEmpty()) return;
+        if(!running || !ready || writing) return;
+        if(outgoing.isEmpty()) { Runnable action=afterSend; afterSend=null; if(action!=null) action.run(); return; }
         writing=true; byte[] f=outgoing.peek(); boolean ok;
         try {
             if(hosting) { tx.setValue(f); ok=server.notifyCharacteristicChanged(remote,tx,true); }
@@ -172,7 +175,7 @@ public final class BleLink {
         try { if(adapter!=null && adapter.getBluetoothLeAdvertiser()!=null) adapter.getBluetoothLeAdvertiser().stopAdvertising(advertiseCallback); } catch(Exception ignored) {}
         if(client!=null) { BluetoothGatt c=client; client=null; try { c.disconnect(); c.close(); } catch(Exception ignored) {} }
         if(server!=null) { BluetoothGattServer s=server; server=null; try { if(remote!=null) s.cancelConnection(remote); s.close(); } catch(Exception ignored) {} }
-        remote=null; tx=null; rx=null; outgoing.clear(); early.clear(); decoder.reset(); devices.clear(); hosting=false;
+        remote=null; tx=null; rx=null; afterSend=null; outgoing.clear(); early.clear(); decoder.reset(); devices.clear(); hosting=false;
     }
     private void fail(String reason) { stop(); listener.closed(reason); }
 }

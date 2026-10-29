@@ -1,8 +1,8 @@
 # Install ChitChat on two phones
 
-**The Android APK is built.** Download `ChitChat-android.apk` from the repository's `codex/chitchat-download` branch → `downloads/`, or download and unzip the **ChitChat-Android-APK** artifact from a successful **Actions → Build ChitChat** run. Open the APK directly in your phone's Files app.
+**Use the 0.2.0 APK on both phones.** Download `ChitChat-android.apk` from the repository's `codex/chitchat-download` branch → `downloads/`, or download and unzip the **ChitChat-Android-APK** artifact from a successful **Actions → Build ChitChat** run. Open the APK directly in your phone's Files app.
 
-The Android source is in `chitchat/android/`; the iPhone project is `chitchat/ios/ChitChat.xcodeproj`. The iPhone project compiles, but installation still requires Apple signing. Physical phone-to-phone Bluetooth tests remain outstanding.
+The Android source is in `chitchat/android/`; the iPhone project is `chitchat/ios/ChitChat.xcodeproj`. The iPhone source is included; installation requires Apple signing. Check CI for the current version’s compile result. Physical phone-to-phone Bluetooth tests remain outstanding.
 
 ## Two Android phones
 
@@ -29,10 +29,12 @@ On ChitChat's home screen, tap **SHARE CHITCHAT WITH A FRIEND** and choose Quick
 
 ### 4. Start talking
 
+Version 0.2 uses a new protocol. Update **both** phones; it cannot chat with the earlier code-matching build.
+
 1. Start within **1–2 metres** with both apps open.
 2. You tap **Open a room**. Note the four-character room ID.
-3. Your friend taps **Find a friend**, then your room ID. If discovery doesn't show a room ID, look for **Nearby ChitChat room**.
-4. Compare the **12 hexadecimal characters** shown on both phones, in three groups of four. If identical, both tap **Codes match**. If different, disconnect and try again.
+3. Your friend taps **Find a friend**, then **Connect** beside your room ID. If discovery doesn't show a room ID, look for **Nearby ChitChat room**.
+4. Your friend taps **Connect** to send a request. You see their nickname and choose **Accept** or **Decline**. Accept opens the chat on both phones; there is no code to compare. Only accept requests you expect; a nickname does not prove someone’s identity.
 5. Type a message and tap the white **↑** button. “Delivered ✓” appears after the recipient app acknowledges receipt.
 6. Keep both apps visible. Range depends on hardware, walls and interference; no fixed range is promised. Leaving the app, losing Bluetooth or moving out of range closes the session. Reconnect by opening a new room. Messages are not queued for later delivery.
 
@@ -64,7 +66,7 @@ There is no universal unsigned IPA that installs on any iPhone. The simulator bu
 | --- | --- |
 | No room found | Both apps open; one hosts, one searches; move closer; check Bluetooth/Nearby devices; Android 8–11 also needs Location on. Search stops after 30 seconds; tap Search again. |
 | Phone cannot open a room | Swap roles. Some Android BLE hardware supports scanning but not peripheral advertising. |
-| Connected but no chat | Both people must compare and approve the verification code. It times out after three minutes. |
+| Connected but no chat | The room owner must accept the connection request. Pending requests expire after three minutes. Both phones must use version 0.2.0 or later. |
 | “Unconfirmed” message | The other app hasn't acknowledged it. It may or may not have arrived. Reconnect; there is no silent automatic resend. |
 | Disconnected after switching apps/locking | This first version is foreground-only. Keep both apps on screen; the app keeps the display awake while connected. |
 | APK says “App not installed” / signature conflict | Builds made with different signing keys cannot update each other. Uninstall the old personal build, then install the new APK. |
@@ -73,4 +75,4 @@ There is no universal unsigned IPA that installs on any iPhone. The simulator bu
 
 ## Privacy in plain language
 
-Nearby devices can detect that a ChitChat room exists. Session message contents use encryption after both people verify a code. Nicknames are sent only after approval; your nickname is saved locally. Messages are kept in memory and cleared when the room closes. A recipient can still copy or photograph them; keyboards, the operating system and crash/memory tooling are outside this promise. This implementation has not had an independent security audit.
+Nearby devices can detect that a ChitChat room exists. Session message contents use encryption. The requester shares a nickname when sending a request; the owner shares theirs on acceptance. Approval gives permission to chat, without verifying identity. Your nickname is saved locally. Messages are kept in memory and cleared when the room closes. A recipient can still copy or photograph them; keyboards, the operating system and crash/memory tooling are outside this promise. This implementation has not had an independent security audit.

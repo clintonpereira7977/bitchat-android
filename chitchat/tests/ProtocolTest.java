@@ -9,10 +9,31 @@ public final class ProtocolTest {
     static void check(boolean ok,String label) { checks++; if(!ok) throw new AssertionError(label); }
     static void reject(Action a,String label) throws Exception { boolean threw=false; try { a.run(); } catch(Exception e) { threw=true; } check(threw,label); }
     public static void main(String[] args) throws Exception {
+        ConsentGate h=new ConsentGate(true),g=new ConsentGate(false);
+        check(!h.canChat() && !g.canChat(),"no chat before a connection request");
+        reject(h::requireChat,"host cannot message before approval"); reject(g::requireChat,"requester cannot message before approval");
+        reject(h::accept,"no accepting a nonexistent request"); reject(g::receiveAcceptance,"no unsolicited acceptance before keys");
+        h.keysReady(); g.keysReady();
+        reject(h::receiveReady,"requester cannot unlock host with early ready");
+        reject(g::receiveReady,"wrong-role ready rejected"); reject(h::receiveAcceptance,"wrong-role acceptance rejected");
+        reject(h::receiveDeclineAck,"unsolicited decline acknowledgment rejected");
+        h.receiveRequest(); check(h.state()==ConsentGate.State.INCOMING_REQUEST,"host sees an incoming request");
+        reject(h::receiveRequest,"duplicate request rejected"); reject(h::requireChat,"request alone does not open chat");
+        h.accept(); check(!h.canChat(),"host waits for requester readiness"); reject(h::accept,"duplicate approval rejected");
+        g.receiveAcceptance(); check(g.canChat(),"requester chat opens only after host approval");
+        h.receiveReady(); check(h.canChat(),"host chat opens after approved requester is ready"); h.requireChat(); g.requireChat();
+        ConsentGate no=new ConsentGate(true),denied=new ConsentGate(false);
+        no.keysReady(); denied.keysReady(); no.receiveRequest(); no.decline(); denied.receiveDecline();
+        check(!no.canChat() && !denied.canChat(),"decline never opens chat");
+        reject(no::receiveReady,"declined requester cannot reopen chat"); reject(denied::receiveAcceptance,"acceptance after decline rejected");
+        no.receiveDeclineAck(); check(no.state()==ConsentGate.State.CLOSED,"decline acknowledgment closes permission state");
+        reject(no::requireChat,"closed request cannot message"); reject(denied::requireChat,"declined request cannot message");
+        ConsentGate freshRequest=new ConsentGate(true); freshRequest.keysReady(); freshRequest.receiveRequest();
+        check(!freshRequest.canChat(),"a fresh request needs fresh approval");
         for(int trial=0;trial<30;trial++) {
             Session a=new Session(),b=new Session();
-            String left=a.receiveHello(b.hello()),right=b.receiveHello(a.hello()); check(left.equals(right),"same verification code");
-            check(left.matches("[0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4}"),"code format");
+            String left=a.receiveHello(b.hello()),right=b.receiveHello(a.hello()); check(left.equals(right),"same internal key fingerprint");
+            check(left.matches("[0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4}"),"internal fingerprint format");
             String[] texts={"hello","नमस्ते दोस्त 👋","你好\nline two\t\"\\",String.join("",Collections.nCopies(1000,"x"))};
             for(String s:texts) {
                 byte[] sealed=a.seal(s); Wire.Decoder decoder=new Wire.Decoder(); byte[] packet=null;
@@ -27,7 +48,7 @@ public final class ProtocolTest {
             reject(()->a.receiveHello(b.hello()),"duplicate hello rejected");
             a.destroy(); reject(()->a.seal("closed"),"destroyed session cannot send");
         }
-        Session fresh=new Session(); reject(()->fresh.receiveHello(fresh.hello()),"reflected key rejected"); reject(()->fresh.seal("early"),"plaintext session disallowed");
+        Session fresh=new Session(); byte[] legacy=fresh.hello(); legacy[0]=1; reject(()->new Session().receiveHello(legacy),"legacy verification protocol rejected"); reject(()->fresh.receiveHello(fresh.hello()),"reflected key rejected"); reject(()->fresh.seal("early"),"plaintext session disallowed");
         reject(()->new Session().receiveHello(new byte[66]),"malformed public key rejected");
         reject(()->Wire.split(new byte[4097]),"bounded frame size"); reject(()->Wire.split(new byte[0]),"empty frame rejected");
         Random random=new Random(42);

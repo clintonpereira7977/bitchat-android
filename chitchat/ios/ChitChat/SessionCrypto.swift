@@ -13,18 +13,18 @@ final class SessionCrypto {
     private var sendKey: SymmetricKey?
     private var receiveKey: SymmetricKey?
     private var seen = Set<Data>()
-    var hello: Data { Data([1]) + privateKey.publicKey.x963Representation }
+    var hello: Data { Data([3]) + privateKey.publicKey.x963Representation }
     func receiveHello(_ packet: Data) throws -> String {
-        guard key == nil, packet.count == 66, packet.first == 1 else { throw ChatError.invalid("Invalid handshake") }
+        guard key == nil, packet.count == 66, packet.first == 3 else { throw ChatError.invalid("Invalid handshake") }
         let peer = Data(packet.dropFirst()), own = privateKey.publicKey.x963Representation
         guard peer != own else { throw ChatError.invalid("Reflected handshake") }
         let remote = try P256.KeyAgreement.PublicKey(x963Representation: peer)
         let sorted = own.lexicographicallyPrecedes(peer) ? own + peer : peer + own
         let secret = try privateKey.sharedSecretFromKeyAgreement(with: remote)
-        let derived = secret.hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data(SHA256.hash(data: sorted)), sharedInfo: Data("ChitChat/v1/session".utf8), outputByteCount: 32)
+        let derived = secret.hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data(SHA256.hash(data: sorted)), sharedInfo: Data("ChitChat/v2/session".utf8), outputByteCount: 32)
         key = derived
-        let low = SymmetricKey(data: Data(HMAC<SHA256>.authenticationCode(for: Data("ChitChat/v1/low-to-high".utf8), using: derived)))
-        let high = SymmetricKey(data: Data(HMAC<SHA256>.authenticationCode(for: Data("ChitChat/v1/high-to-low".utf8), using: derived)))
+        let low = SymmetricKey(data: Data(HMAC<SHA256>.authenticationCode(for: Data("ChitChat/v2/low-to-high".utf8), using: derived)))
+        let high = SymmetricKey(data: Data(HMAC<SHA256>.authenticationCode(for: Data("ChitChat/v2/high-to-low".utf8), using: derived)))
         sendKey = own.lexicographicallyPrecedes(peer) ? low : high
         receiveKey = own.lexicographicallyPrecedes(peer) ? high : low
         let digest = derived.withUnsafeBytes { Data(SHA256.hash(data: Data($0))) }
@@ -34,7 +34,7 @@ final class SessionCrypto {
     func seal(_ object: [String: String]) throws -> Data {
         guard let sendKey else { throw ChatError.invalid("Handshake required") }
         let bytes = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
-        let box = try AES.GCM.seal(bytes, using: sendKey, authenticating: Data("ChitChat/v1".utf8))
+        let box = try AES.GCM.seal(bytes, using: sendKey, authenticating: Data("ChitChat/v2".utf8))
         guard let combined = box.combined else { throw ChatError.invalid("Encryption failed") }
         return Data([2]) + combined
     }
@@ -43,7 +43,7 @@ final class SessionCrypto {
         let nonce = Data(packet.dropFirst().prefix(12))
         guard !seen.contains(nonce), seen.count < 10000 else { throw ChatError.invalid("Replay or session limit; reconnect") }
         let box = try AES.GCM.SealedBox(combined: Data(packet.dropFirst()))
-        let bytes = try AES.GCM.open(box, using: receiveKey, authenticating: Data("ChitChat/v1".utf8))
+        let bytes = try AES.GCM.open(box, using: receiveKey, authenticating: Data("ChitChat/v2".utf8))
         guard let object = try JSONSerialization.jsonObject(with: bytes) as? [String: String] else { throw ChatError.invalid("Invalid message") }
         seen.insert(nonce); return object
     }

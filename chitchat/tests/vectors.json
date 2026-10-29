@@ -1,8 +1,8 @@
 {
   "description": "Public deterministic test keys only. Never use these keys/nonces in the app.",
   "privateKeyA": "0000000000000000000000000000000000000000000000000000000000000001",
-  "peerHelloBase64": "AQR88nsYjQNPfopSOAMEtRrDwIlp4nfyGzWmC0j8R2aZeAd3VRDbjtBAKT2axp90MNu6fa3mPOmCKZ4Et50ieHPR",
-  "code": "3D9A D468 C1F8",
-  "incomingPacketBase64": "AgABAgMEBQYHCAkKC/ypmsnSyb/634GKame6gIHkB0jWVy8oA2uRahoAV9z0LWGK2aGbXyXQe7lIDQGqYLzk1YdIDxnNTl2b+oTefLR3JiBdfT3z4deeotYKck3StJaU+bXa7g==",
+  "peerHelloBase64": "AwR88nsYjQNPfopSOAMEtRrDwIlp4nfyGzWmC0j8R2aZeAd3VRDbjtBAKT2axp90MNu6fa3mPOmCKZ4Et50ieHPR",
+  "fingerprint": "BE01 7016 F660",
+  "incomingPacketBase64": "AgABAgMEBQYHCAkKC/Hkdg9kjW38BNKVm5wmz67nmZDsFiGmr7yxQQlaTfgDpvVTaDdQiZ9ceJq7BFZ9fug57FrQiyOfOIXLfV0dUIeXL/sqjV6yzgFT6VV1XE6UnlswAcgVRQ==",
   "text": "Cross-platform fixture नमस्ते 👋"
 }
