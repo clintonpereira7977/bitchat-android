@@ -24,8 +24,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Install pinned Wrangler and produce dependency lock
-        run: npm install --ignore-scripts=false
+      - name: Install the tested dependency lock
+        run: npm ci
       - name: Check delivery API and push behavior with synthetic data
         run: npm test && npm run check
       - name: Verify Cloudflare bundle and free-compatible storage migration
@@ -56,3 +56,4 @@ jobs:
           if result.returncode: raise RuntimeError(result.stderr)
           print('Published tested online dependency lock')
           PYLOCK
+
