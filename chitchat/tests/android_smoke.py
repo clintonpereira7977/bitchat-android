@@ -32,6 +32,10 @@ def tap(entry):
 def wait_for(text):
     for _ in range(12):
         view = screen()
+        if node(view, "Pixel Launcher") is not None and node(view, "responding") is not None:
+            tap(node(view, "Close app"))
+            adb("shell", "am", "start", "-W", "-n", "app.chitchat/.MainActivity")
+            continue
         if node(view, text) is not None:
             return view
         time.sleep(0.5)

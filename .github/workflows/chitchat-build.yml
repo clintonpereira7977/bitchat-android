@@ -55,6 +55,9 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          ram-size: 4096M
+          heap-size: 512M
+          cores: 2
           disable-animations: true
           working-directory: chitchat
           script: |
