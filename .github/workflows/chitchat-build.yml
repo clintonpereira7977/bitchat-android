@@ -1,0 +1,54 @@
+name: Build ChitChat
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/chitchat-build]
+    paths:
+      - 'chitchat/**'
+      - '.github/workflows/chitchat-build.yml'
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: chitchat
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - run: bash scripts/test.sh
+      - run: gradle -p android --no-daemon assembleDebug
+      - run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/ChitChat-android.apk
+          sha256sum dist/ChitChat-android.apk > dist/SHA256SUMS.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/ChitChat-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChitChat-Android-APK
+          path: |
+            chitchat/dist/ChitChat-android.apk
+            chitchat/dist/SHA256SUMS.txt
+          if-no-files-found: error
+  ios-compile:
+    runs-on: macos-14
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: chitchat
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          swiftc ios/ChitChat/SessionCrypto.swift tests/SwiftProtocolTest.swift -o "$RUNNER_TEMP/chitchat-swift-tests"
+          "$RUNNER_TEMP/chitchat-swift-tests"
+      - run: xcodebuild -project ios/ChitChat.xcodeproj -scheme ChitChat -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build

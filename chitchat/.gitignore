@@ -1,0 +1,12 @@
+.tools/
+.test-classes/
+android/.gradle/
+android/local.properties
+android/**/build/
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+.DS_Store
+ios/**/xcuserdata/
+dist/*.apk
