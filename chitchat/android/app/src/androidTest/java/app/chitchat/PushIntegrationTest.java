@@ -29,7 +29,10 @@ public final class PushIntegrationTest {
         long deadline = android.os.SystemClock.uptimeMillis() + 3000;
         android.service.notification.StatusBarNotification[] current;
         do {
-            current = manager.getActiveNotifications();
+            java.util.List<android.service.notification.StatusBarNotification> owned=new java.util.ArrayList<>();
+            for(android.service.notification.StatusBarNotification n:manager.getActiveNotifications())
+                if(n.getId()==PushNotifications.ID&&(n.getTag()==null||n.getTag().startsWith(PushNotifications.TAG_PREFIX)))owned.add(n);
+            current=owned.toArray(new android.service.notification.StatusBarNotification[0]);
             if (current.length == expected) return current;
             android.os.SystemClock.sleep(25);
         } while (android.os.SystemClock.uptimeMillis() < deadline);
@@ -99,6 +102,38 @@ public final class PushIntegrationTest {
             assertEquals(NotificationManager.IMPORTANCE_HIGH,manager.getNotificationChannel(PushNotifications.CHANNEL).getImportance());
             assertTrue(manager.getNotificationChannel(PushNotifications.CHANNEL).shouldVibrate());
         }finally{OnlineActivity.foreground=foreground;}
+    }
+    @Test public void consecutiveMessagesEachCreateFreshAlertsAndProviderDuplicatesDoNotRepeat() {
+        boolean foreground=OnlineActivity.foreground;
+        try {
+            OnlineActivity.foreground=false;OnlinePush.enableForRegisteredAccount(context,ACCOUNT);
+            java.util.Map<String,String> data=new java.util.HashMap<>();data.put("kind","inbox");
+            ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-1");
+            String first=notifications(1)[0].getTag();
+            ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-2");
+            android.service.notification.StatusBarNotification[] second=notifications(2);
+            assertNotEquals(second[0].getTag(),second[1].getTag());
+            assertTrue(first.equals(second[0].getTag())||first.equals(second[1].getTag()));
+            ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-2");notifications(2);
+            ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-3");
+            for(android.service.notification.StatusBarNotification n:notifications(3)){
+                assertEquals(0,n.getNotification().flags&Notification.FLAG_ONLY_ALERT_ONCE);
+                assertEquals("A new message is waiting.",n.getNotification().extras.getString(Notification.EXTRA_TEXT));
+            }
+            String saved=context.getSharedPreferences(OnlinePush.PREFS,0).getAll().toString();
+            assertFalse(saved.contains("synthetic-delivery-1"));
+            PushNotifications.clear(context);notifications(0);
+            ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-4");notifications(1);
+        } finally { OnlineActivity.foreground=foreground; }
+    }
+    @Test public void notificationTrayIsBoundedAndOptOutClearsEveryAlert() {
+        OnlinePush.enableForRegisteredAccount(context,ACCOUNT);
+        for(int i=0;i<PushNotifications.MAX_VISIBLE+3;i++){
+            PushNotifications.show(context,"inbox","synthetic-bounded-delivery-"+i);
+            notifications(Math.min(i+1,PushNotifications.MAX_VISIBLE));
+        }
+        OnlinePush.disable(context);notifications(0);
+        assertFalse(context.getSharedPreferences(OnlinePush.PREFS,0).contains("alerted_deliveries"));
     }
     @Test public void notificationsNeverContainUntrustedContentAndHaveImmutableOpenIntent() throws Exception {
         OnlinePush.enableForRegisteredAccount(context, ACCOUNT);

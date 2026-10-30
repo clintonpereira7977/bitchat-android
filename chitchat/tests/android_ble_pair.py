@@ -152,6 +152,7 @@ with open("dist/peer-emulator.log", "w") as log:
         guest.tap(guest.screen(), description="Send message")
         host.wait("hello-from-guest")
         guest.wait("delivered")
+        host.screenshot("07-ble-keyboard-host"); guest.screenshot("08-ble-keyboard-guest")
         host.adb("shell", "input", "keyevent", "BACK")
         guest.adb("shell", "input", "keyevent", "BACK")
         host.screenshot("03-ble-host"); guest.screenshot("04-ble-guest")

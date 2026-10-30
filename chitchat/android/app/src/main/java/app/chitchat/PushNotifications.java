@@ -10,6 +10,8 @@ final class PushNotifications {
     static final String CHANNEL = "chitchat-online";
     static final int ID = 2201;
     static final String OPEN_ONLINE = "app.chitchat.OPEN_ONLINE";
+    static final String TAG_PREFIX = "chitchat-online:";
+    static final int MAX_VISIBLE = 6;
     static String problem(Context context) {
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             return "Android notification permission is off for ChitChat.";
@@ -21,6 +23,9 @@ final class PushNotifications {
         return null;
     }
     static void show(Context context, String kind) {
+        show(context, kind, null);
+    }
+    static void show(Context context, String kind, String deliveryId) {
         String body = PushPolicy.body(OnlinePush.enabled(context), kind);
         if (body == null) return;
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
@@ -48,10 +53,46 @@ final class PushNotifications {
         // Recheck consent immediately before displaying a queued wake-up hint.
         synchronized (OnlinePush.class) {
             if (OnlinePush.enabled(context)) {
-                try { manager.notify(ID, builder.build()); } catch (SecurityException ignored) {}
+                String key = deliveryKey(deliveryId);
+                if (key != null && wasAlerted(context, key)) return;
+                try {
+                    // Reusing one notification ID is an update to an existing
+                    // alert on several Android versions. Give each delivery a
+                    // fresh tag, retain a small bounded tray, and deduplicate
+                    // provider redelivery without keeping any message content.
+                    java.util.List<android.service.notification.StatusBarNotification> active = new java.util.ArrayList<>();
+                    for (android.service.notification.StatusBarNotification n : manager.getActiveNotifications()) {
+                        if (n.getId() == ID && n.getTag() == null) manager.cancel(ID);
+                        else if (n.getTag() != null && n.getTag().startsWith(TAG_PREFIX)) active.add(n);
+                    }
+                    java.util.Collections.sort(active, (a,b) -> Long.compare(a.getPostTime(), b.getPostTime()));
+                    for (int i=0;i<=active.size()-MAX_VISIBLE;i++) manager.cancel(active.get(i).getTag(), ID);
+                    manager.notify(TAG_PREFIX + java.util.UUID.randomUUID(), ID, builder.build());
+                    if (key != null) rememberAlert(context, key);
+                } catch (SecurityException ignored) {}
             }
         }
     }
-    static void clear(Context context) { context.getSystemService(NotificationManager.class).cancel(ID); }
+    private static String deliveryKey(String value) {
+        if (value == null || value.isEmpty() || value.length() > 4096) return null;
+        try { return OnlineCrypto.b64(OnlineCrypto.hash(OnlineCrypto.utf8(value))); }
+        catch (Exception impossible) { throw new IllegalStateException(impossible); }
+    }
+    private static boolean wasAlerted(Context context, String key) {
+        return java.util.Arrays.asList(context.getSharedPreferences(OnlinePush.PREFS,0).getString("alerted_deliveries", "").split("\n")).contains(key);
+    }
+    private static void rememberAlert(Context context, String key) {
+        String saved=context.getSharedPreferences(OnlinePush.PREFS,0).getString("alerted_deliveries", "");
+        java.util.List<String> keys=new java.util.ArrayList<>();
+        for(String old:saved.split("\n"))if(!old.isEmpty())keys.add(old);
+        keys.add(key);while(keys.size()>64)keys.remove(0);
+        context.getSharedPreferences(OnlinePush.PREFS,0).edit().putString("alerted_deliveries",String.join("\n",keys)).apply();
+    }
+    static void clear(Context context) {
+        NotificationManager manager=context.getSystemService(NotificationManager.class);
+        manager.cancel(ID);
+        for(android.service.notification.StatusBarNotification n:manager.getActiveNotifications())
+            if(n.getTag()!=null&&n.getTag().startsWith(TAG_PREFIX))manager.cancel(n.getTag(),ID);
+    }
     private PushNotifications() {}
 }

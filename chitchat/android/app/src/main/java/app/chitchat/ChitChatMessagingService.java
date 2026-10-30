@@ -7,11 +7,14 @@ import com.google.firebase.messaging.RemoteMessage;
 public final class ChitChatMessagingService extends FirebaseMessagingService {
     @Override public void onNewToken(String token) { OnlinePush.recordRotatedToken(this, token); }
     @Override public void onMessageReceived(RemoteMessage message) {
-        dispatch(this, message.getData());
+        dispatch(this, message.getData(), message.getMessageId());
     }
     static void dispatch(android.content.Context context, java.util.Map<String,String> data) {
+        dispatch(context,data,null);
+    }
+    static void dispatch(android.content.Context context, java.util.Map<String,String> data, String deliveryId) {
         if(OnlineActivity.foreground && !"test".equals(data.get("kind"))){context.sendBroadcast(new android.content.Intent(OnlineActivity.SYNC).setPackage(context.getPackageName()));return;}
-        PushNotifications.show(context, data.get("kind"));
+        PushNotifications.show(context, data.get("kind"), deliveryId);
     }
     @Override public void onDeletedMessages() {
         if (OnlineActivity.foreground) sendBroadcast(new android.content.Intent(OnlineActivity.SYNC).setPackage(getPackageName()));
