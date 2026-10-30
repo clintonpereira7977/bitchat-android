@@ -32,7 +32,7 @@ const envelope = () => b64(crypto.getRandomValues(new Uint8Array(160)));
 test('deployment starts healthy and closed to registration without its pilot secret', async () => {
   const f = fixture({ PILOT_INVITE_CODE: '' }), a = await actor();
   const response = await f.store.handle(new Request('https://chitchat.test/v1/health'));
-  const health = await response.json(); assert.equal(health.registrationConfigured, false); assert.equal(health.pushConfigured, false); assert.equal(health.appIntegration, 'pending');
+  const health = await response.json(); assert.equal(health.registrationConfigured, false); assert.equal(health.pushConfigured, false); assert.equal(health.appIntegration, 'android-beta1');
   assert.equal((await call(f, a, 'POST', '/v1/register', { name: 'A', keyBundle: {} })).status, 503); f.db.close();
 });
 test('signatures authenticate keys and bind the method, body, path and clock; requests cannot replay', async () => {

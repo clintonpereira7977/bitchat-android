@@ -56,4 +56,39 @@ jobs:
           if result.returncode: raise RuntimeError(result.stderr)
           print('Published tested online dependency lock')
           PYLOCK
-
+  iphone-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: chitchat/online
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install server dependencies and isolated browser test tools
+        run: |
+          npm ci
+          npm install --prefix "$RUNNER_TEMP/chitchat-browser" --no-save playwright@1.58.2
+          node "$RUNNER_TEMP/chitchat-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Exercise the iPhone Bluetooth page at its actual deployment prefix
+        run: |
+          node node_modules/wrangler/bin/wrangler.js dev --local --ip 127.0.0.1 --port 8787 > "$RUNNER_TEMP/chitchat-web-relay.log" 2>&1 &
+          node --input-type=module - <<'JS'
+          for(let i=0;i<100;i++){
+            try{const r=await fetch('http://127.0.0.1:8787/nearby/');if(r.ok){console.log('Prefixed browser client ready');process.exit(0);}}catch{}
+            await new Promise(resolve=>setTimeout(resolve,250));
+          }
+          throw Error('Prefixed client did not start');
+          JS
+          CHITCHAT_PLAYWRIGHT="$RUNNER_TEMP/chitchat-browser/node_modules/playwright" CHITCHAT_WEB_ORIGIN=http://127.0.0.1:8787/nearby node test/bluefy-browser.cjs
+      - name: Upload synthetic iPhone web UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChitChat-iPhone-web-prefix
+          path: chitchat/online/dist/web-ui/*.png
+          if-no-files-found: ignore

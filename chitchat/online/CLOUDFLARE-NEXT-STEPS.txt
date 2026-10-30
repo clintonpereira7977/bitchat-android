@@ -1,0 +1,30 @@
+ChitChat — update the existing Cloudflare Worker after Android beta checks
+
+The owner has already configured PILOT_INVITE_CODE and
+FCM_SERVICE_ACCOUNT_JSON in Production runtime. Preserve both secrets.
+
+Deploy the latest codex/chitchat-online branch from the existing repository.
+Keep Worker name chitchat-online, Free plan, and the existing Durable Object.
+Do not recreate the Worker, reset storage, or add a new migration.
+
+If the build uses repository root /, use this exact deploy command:
+git fetch origin codex/chitchat-online && git checkout --detach FETCH_HEAD && cd chitchat/online && npm ci && npm run deploy
+
+If Builds already selects codex/chitchat-online with Root directory
+chitchat/online, use npm run deploy instead. Do not nest the cd command.
+
+After a successful production deployment with 100% traffic, verify:
+https://chitchat-online.clintonpereira7977.workers.dev/v1/health
+status: ok
+registrationConfigured: true
+pushConfigured: true
+pushPayload: data-only-v1
+appIntegration: android-beta1
+
+The public root should show Get the Android beta. /nearby/ should open the
+iPhone Bluetooth page; /nearby/install.html contains both iPhone options.
+No credentials or pilot invitation should appear on these public pages.
+
+Install ChitChat-0.3-beta1.apk on both Android phones. The older 0.2 APK
+remains Bluetooth-only. Notification delivery still requires a real-phone
+test after both people register, approve the connection, and opt in.

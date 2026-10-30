@@ -31,8 +31,12 @@ async function connect(who) {
 }
 try {
   await wait(async () => { if (child.exitCode !== null) throw Error('workerd exited: ' + log); try { return (await fetch(origin + '/v1/health')).ok; } catch { return false; } }, 'local runtime');
-  const home = await fetch(origin + '/'); assert.equal(home.status, 200); assert.ok((await home.text()).includes('Internet chat is being connected'));
-  const health = await (await fetch(origin + '/v1/health')).json(); assert.equal(health.appIntegration, 'pending'); assert.equal(health.pushConfigured, false);
+  const home = await fetch(origin + '/'); assert.equal(home.status, 200); assert.ok((await home.text()).includes('Get the Android beta'));
+  const health = await (await fetch(origin + '/v1/health')).json(); assert.equal(health.appIntegration, 'android-beta1'); assert.equal(health.pushConfigured, false); assert.equal(health.pushPayload, 'data-only-v1');
+  const nearby = await fetch(origin + '/nearby/'); assert.equal(nearby.status, 200); assert.ok((await nearby.text()).includes('Small talk.'));
+  const module = await fetch(origin + '/nearby/protocol.mjs'); assert.equal(module.status, 200); assert.ok((await module.text()).includes('ChitChat/v2'));
+  const guide = await fetch(origin + '/nearby/install.html'); assert.equal(guide.status, 200); assert.equal(guide.redirected, false);
+  const iphone = await fetch(origin + '/nearby/downloads/ChitChat-iPhone-unsigned.ipa'); assert.equal(iphone.status, 200); assert.ok((await iphone.arrayBuffer()).byteLength > 100000);
   const preflight = await fetch(origin + '/v1/messages', { method: 'OPTIONS', headers: { Origin: 'https://synthetic-client.test', 'Access-Control-Request-Method': 'POST' } }); assert.equal(preflight.status, 204); assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), '*');
   const a = await actor(), b = await actor(); await register(a); await register(b);
   const owner = await connect(b), sender = await connect(a);

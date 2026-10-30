@@ -1,6 +1,8 @@
 # ChitChat internet delivery service — private pilot
 
-This is the deployable Cloudflare **backend**, not a completed internet chat app. The existing Android Bluetooth APK does not use it yet. Client integration, a reviewed client encryption design, and real-phone notification checks remain separate stages. The backend's home page and `/v1/health` report that distinction.
+This is the deployable Cloudflare backend and public installation guide for the ChitChat Android 0.3 beta. The tested Android client is under `chitchat/android`; its guide is `chitchat/docs/ONLINE-ANDROID.md`. The working older Android 0.2 APK remains Bluetooth-only. Real-phone Online/notification checks and independent security review remain necessary before wider use.
+
+The public root links to the Android installer. `/nearby/` serves the already-tested iPhone Bluefy Bluetooth client and `/nearby/install.html` explains the unsigned native iPhone/Windows alternative. These iPhone options are Bluetooth-only and require physical-device tests; iPhone Online mode is not implemented yet. Static assets use the existing Workers Free deployment, without a new paid service or domain.
 
 It stores opaque client-encrypted envelopes for approved contacts, for at most 24 hours of delivery availability. A recipient must acknowledge delivery before its queued envelope is removed. Expired envelopes are never returned; background cleanup deletes expired rows on a best-effort schedule (normally every five minutes). Underlying hosting persistence/backups are outside an immediate physical-erasure claim. No recipient or remote-device erasure can be guaranteed by this backend.
 
@@ -33,7 +35,7 @@ git fetch origin codex/chitchat-online && git checkout --detach FETCH_HEAD && cd
 
 This explicitly checks out the tested backend branch, even if the importer initially selected main. After initial deployment, change the production branch to `codex/chitchat-online` and Root directory to `chitchat/online` under Settings → Builds, then restore the normal `npm run deploy` command. This avoids building any Android code. Only use this fallback on the setup screen where Root directory is still the repository root.
 
-After deployment, open the generated workers.dev address, then `/v1/health`. Expect `status: ok`, `appIntegration: pending`, and initially `registrationConfigured: false`, `pushConfigured: false`. A successful deployment does **not** mean the APK now supports internet messaging.
+After deployment, open the generated workers.dev address, then `/v1/health`. Expect `status: ok`, `appIntegration: android-beta1`, `pushPayload: data-only-v1`, and both configuration flags true once the owner has added the two runtime secrets. A deployment does not update an installed APK; both Android phones must install the 0.3 beta. Configuration flags alone do not prove actual notification delivery.
 
 ## Pilot registration and notifications
 
