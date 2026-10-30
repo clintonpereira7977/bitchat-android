@@ -8,7 +8,6 @@ on:
       - 'chitchat/docs/FIREBASE-ANDROID.md'
       - 'chitchat/docs/ONLINE-ANDROID.md'
       - 'chitchat/scripts/publish-online-android.py'
-      - 'chitchat/online/**'
       - '.github/workflows/chitchat-firebase-check.yml'
 permissions:
   contents: read
