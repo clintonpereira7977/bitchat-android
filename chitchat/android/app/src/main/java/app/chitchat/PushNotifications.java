@@ -60,14 +60,14 @@ final class PushNotifications {
                     // alert on several Android versions. Give each delivery a
                     // fresh tag, retain a small bounded tray, and deduplicate
                     // provider redelivery without keeping any message content.
-                    java.util.List<android.service.notification.StatusBarNotification> active = new java.util.ArrayList<>();
-                    for (android.service.notification.StatusBarNotification n : manager.getActiveNotifications()) {
-                        if (n.getId() == ID && n.getTag() == null) manager.cancel(ID);
-                        else if (n.getTag() != null && n.getTag().startsWith(TAG_PREFIX)) active.add(n);
-                    }
-                    java.util.Collections.sort(active, (a,b) -> Long.compare(a.getPostTime(), b.getPostTime()));
-                    for (int i=0;i<=active.size()-MAX_VISIBLE;i++) manager.cancel(active.get(i).getTag(), ID);
-                    manager.notify(TAG_PREFIX + java.util.UUID.randomUUID(), ID, builder.build());
+                    manager.cancel(ID);
+                    java.util.List<String> tags=visibleTags(context);
+                    while(tags.size()>=MAX_VISIBLE)manager.cancel(tags.remove(0),ID);
+                    String tag=TAG_PREFIX+java.util.UUID.randomUUID();tags.add(tag);
+                    // Android's active-notification snapshot can lag notify /
+                    // cancel. Track pending posts too, so a burst stays bounded.
+                    context.getSharedPreferences(OnlinePush.PREFS,0).edit().putString("visible_alerts",String.join("\n",tags)).apply();
+                    manager.notify(tag, ID, builder.build());
                     if (key != null) rememberAlert(context, key);
                 } catch (SecurityException ignored) {}
             }
@@ -88,11 +88,21 @@ final class PushNotifications {
         keys.add(key);while(keys.size()>64)keys.remove(0);
         context.getSharedPreferences(OnlinePush.PREFS,0).edit().putString("alerted_deliveries",String.join("\n",keys)).apply();
     }
+    private static java.util.List<String> visibleTags(Context context) {
+        java.util.List<String> tags=new java.util.ArrayList<>();
+        for(String tag:context.getSharedPreferences(OnlinePush.PREFS,0).getString("visible_alerts", "").split("\n"))
+            if(tag.startsWith(TAG_PREFIX))tags.add(tag);
+        return tags;
+    }
     static void clear(Context context) {
-        NotificationManager manager=context.getSystemService(NotificationManager.class);
-        manager.cancel(ID);
-        for(android.service.notification.StatusBarNotification n:manager.getActiveNotifications())
-            if(n.getTag()!=null&&n.getTag().startsWith(TAG_PREFIX))manager.cancel(n.getTag(),ID);
+        synchronized(OnlinePush.class){
+            NotificationManager manager=context.getSystemService(NotificationManager.class);
+            manager.cancel(ID);
+            for(String tag:visibleTags(context))manager.cancel(tag,ID);
+            for(android.service.notification.StatusBarNotification n:manager.getActiveNotifications())
+                if(n.getTag()!=null&&n.getTag().startsWith(TAG_PREFIX))manager.cancel(n.getTag(),ID);
+            context.getSharedPreferences(OnlinePush.PREFS,0).edit().remove("visible_alerts").apply();
+        }
     }
     private PushNotifications() {}
 }

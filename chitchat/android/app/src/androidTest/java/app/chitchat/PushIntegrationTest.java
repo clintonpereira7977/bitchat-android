@@ -134,6 +134,7 @@ public final class PushIntegrationTest {
         }
         OnlinePush.disable(context);notifications(0);
         assertFalse(context.getSharedPreferences(OnlinePush.PREFS,0).contains("alerted_deliveries"));
+        assertFalse(context.getSharedPreferences(OnlinePush.PREFS,0).contains("visible_alerts"));
     }
     @Test public void notificationsNeverContainUntrustedContentAndHaveImmutableOpenIntent() throws Exception {
         OnlinePush.enableForRegisteredAccount(context, ACCOUNT);

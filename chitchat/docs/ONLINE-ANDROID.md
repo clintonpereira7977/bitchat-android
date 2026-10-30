@@ -1,4 +1,4 @@
-# ChitChat Online Android beta 0.3 — notification update
+# ChitChat Online Android beta 0.3 — beta 3 update
 
 This development branch adds an Online mode alongside the existing Nearby
 Bluetooth app. Both people need the new app for Online. Existing Nearby 0.2
@@ -6,7 +6,7 @@ users remain compatible with this app's unchanged Bluetooth transport.
 
 ## Install and use
 
-1. Install ChitChat-0.3-beta2.apk from the owner's shared installer or the
+1. Install ChitChat-0.3-beta3.apk from the owner's shared installer or the
    codex/chitchat-download branch. Allow installation from your Files app if
    Android asks. This APK needs Android 8+; optional notifications need Google
    Play services. No Play Store publication is required.

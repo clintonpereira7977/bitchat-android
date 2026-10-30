@@ -32,8 +32,8 @@ final class OnlinePush {
     static synchronized void disable(Context context) {
         // The Online client must also DELETE /v1/push using signed auth.
         // No Firebase SDK call here: Nearby mode must not trigger registration.
-        prefs(context).edit().clear().commit();
         PushNotifications.clear(context);
+        prefs(context).edit().clear().commit();
     }
     static synchronized void recordRotatedToken(Context context, String token) {
         if (enabled(context) && validToken(token)) {
