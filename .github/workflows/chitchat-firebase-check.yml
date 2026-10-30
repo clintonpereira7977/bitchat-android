@@ -20,6 +20,11 @@ jobs:
     defaults:
       run:
         working-directory: chitchat
+    env:
+      CHITCHAT_KEYSTORE_B64: ${{ secrets.CHITCHAT_KEYSTORE_B64 }}
+      CHITCHAT_KEYSTORE_PASSWORD: ${{ secrets.CHITCHAT_KEYSTORE_PASSWORD }}
+      CHITCHAT_KEY_ALIAS: ${{ secrets.CHITCHAT_KEY_ALIAS }}
+      CHITCHAT_KEY_PASSWORD: ${{ secrets.CHITCHAT_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -36,6 +41,22 @@ jobs:
         with:
           gradle-version: '8.9'
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Prepare permanent owner signing key when configured
+        run: |
+          python3 - <<'PYSIGN'
+          import base64,os
+          from pathlib import Path
+          names=['CHITCHAT_KEYSTORE_B64','CHITCHAT_KEYSTORE_PASSWORD','CHITCHAT_KEY_ALIAS','CHITCHAT_KEY_PASSWORD']
+          present=[bool(os.environ.get(name)) for name in names]
+          if any(present) and not all(present): raise RuntimeError('All four owner signing secrets must be configured together')
+          if all(present):
+              target=Path(os.environ['RUNNER_TEMP'])/'chitchat-owner.p12'
+              target.write_bytes(base64.b64decode(os.environ['CHITCHAT_KEYSTORE_B64'],validate=True))
+              target.chmod(0o600)
+              with open(os.environ['GITHUB_ENV'],'a') as env: env.write('CHITCHAT_KEYSTORE_FILE='+str(target)+'\n')
+              print('Owner signing key configured; no values displayed')
+          else: print('No owner key configured: compile/test only; public APK publication is disabled')
+          PYSIGN
       - name: Check unchanged Bluetooth protocol and Android syntax
         run: bash scripts/test.sh
       - name: Compile production APK, debug APK and native test APK
@@ -128,7 +149,7 @@ jobs:
             chitchat/dist/LIVE-SERVICE.json
           if-no-files-found: ignore
       - name: Publish beta only after native Online and Bluetooth checks pass
-        if: ${{ success() && steps.native.outcome == 'success' }}
+        if: ${{ success() && steps.native.outcome == 'success' && env.CHITCHAT_KEYSTORE_B64 != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/publish-online-android.py

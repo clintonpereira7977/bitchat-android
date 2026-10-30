@@ -128,3 +128,20 @@ server first. Before any migration to a replacement install, configure a permane
 owner signing key and explicitly agree how to reconnect existing contacts.
 The beta 1 public APK and its metadata are preserved. Beta 2 is a separate
 private-pilot diagnostic build; no physical FCM delivery has been verified in CI.
+
+### Permanent owner signing
+
+The owner-signed diagnostic APK was re-signed locally from the fully tested
+beta 2 APK with a newly generated permanent owner key. APK v2/v3 signatures
+were verified and every executable/resource/manifest byte matches CI. Its
+public certificate SHA-256 is:
+14ee30f8a3857f05abeedd1c5068461ac878f5fe136754f3a5f4ae1b380b09e2
+
+The private PKCS12 and four GitHub secret values are provided only in the
+owner's private backup, never in the repository. Configure the four secrets
+CHITCHAT_KEYSTORE_B64, CHITCHAT_KEYSTORE_PASSWORD, CHITCHAT_KEY_ALIAS and
+CHITCHAT_KEY_PASSWORD together. Gradle signs release builds with that key when
+configured. CI still runs without credentials, but publishing an installer
+requires the permanent key. This prevents another transient CI signer from
+replacing the public installer. Old beta 1 needs a one-time fresh identity
+if the owner later agrees to migrate; server diagnostics work without it.

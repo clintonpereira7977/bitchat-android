@@ -9,7 +9,24 @@ android {
     defaultConfig { testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
     buildFeatures { buildConfig true }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
-    buildTypes { release { minifyEnabled false; signingConfig signingConfigs.debug } }
+    signingConfigs {
+        owner {
+            def keyPath = System.getenv('CHITCHAT_KEYSTORE_FILE')
+            if (keyPath) {
+                storeFile file(keyPath)
+                storePassword System.getenv('CHITCHAT_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('CHITCHAT_KEY_ALIAS')
+                keyPassword System.getenv('CHITCHAT_KEY_PASSWORD')
+                storeType 'PKCS12'
+            }
+        }
+    }
+    buildTypes { release {
+        minifyEnabled false
+        // CI can compile a diagnostic artifact without credentials, but its
+        // publication step requires the owner's permanent signing key.
+        signingConfig System.getenv('CHITCHAT_KEYSTORE_FILE') ? signingConfigs.owner : signingConfigs.debug
+    } }
 }
 dependencies {
     implementation platform('com.google.firebase:firebase-bom:35.1.0')
