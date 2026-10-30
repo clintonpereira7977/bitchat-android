@@ -47,7 +47,11 @@ export async function sendPush(env, token, kind, fetcher = fetch, now = Date.now
       // Data-only hints let the app recheck Online consent before displaying a
       // locally generated generic notification. Provider-rendered notification
       // payloads can bypass that check while Android has backgrounded the app.
-      body: JSON.stringify({ ...(validateOnly ? { validate_only: true } : {}), message: { token, data: { kind }, android: { priority: 'high', ttl: '86400s', collapse_key: 'chitchat-inbox' } } })
+      // Each inbox event must retain its own wake-up hint while a phone is
+      // sleeping or reconnecting. A shared collapse key replaces pending
+      // hints and also subjects them to FCM's collapsible-message throttling.
+      // Contact-list refreshes can still coalesce; chat content never enters FCM.
+      body: JSON.stringify({ ...(validateOnly ? { validate_only: true } : {}), message: { token, data: { kind }, android: { priority: 'high', ttl: '86400s', ...(kind === 'inbox' || kind === 'test' ? {} : { collapse_key: 'chitchat-updates' }) } } })
     });
     if (response.status === 401) invalidatePushCache();
     // A provider accepting a request is not proof that a notification was shown.

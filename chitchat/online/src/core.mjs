@@ -97,7 +97,7 @@ export class DeliveryStore {
   }
   get health() {
     const last = this.first('SELECT code FROM push_status WHERE checked > ? ORDER BY checked DESC LIMIT 1', this.clock() - DAY);
-    return { service: 'ChitChat delivery', version: '0.1.2', status: 'ok', queueTTLSeconds: DAY / 1000, registrationConfigured: Boolean(this.env.PILOT_INVITE_CODE), pushConfigured: Boolean(this.env.FCM_SERVICE_ACCOUNT_JSON), pushPayload: 'data-only-v1', pushDiagnostics: 'v1', pushLastResult: last?.code || 'NOT_CHECKED', appIntegration: 'android-beta1' };
+    return { service: 'ChitChat delivery', version: '0.1.3', status: 'ok', queueTTLSeconds: DAY / 1000, registrationConfigured: Boolean(this.env.PILOT_INVITE_CODE), pushConfigured: Boolean(this.env.FCM_SERVICE_ACCOUNT_JSON), pushPayload: 'data-only-v1', pushDelivery: 'per-message-v1', pushDiagnostics: 'v1', pushLastResult: last?.code || 'NOT_CHECKED', appIntegration: 'android-beta1' };
   }
   admit(ipHash) {
     const now = this.clock(), day = Math.floor(now / DAY), minute = Math.floor(now / 60000);

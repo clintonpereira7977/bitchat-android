@@ -27,10 +27,17 @@ test('push uses data-only hints, caches OAuth safely, and never includes message
   const notification = JSON.parse(calls[1].options.body).message;
   assert.deepEqual(notification.data, { kind: 'inbox' }); assert.equal(notification.notification, undefined);
   assert.deepEqual(Object.keys(notification).sort(), ['android', 'data', 'token']);
-  assert.equal(notification.android.ttl, '86400s'); assert.equal(notification.android.collapse_key, 'chitchat-inbox');
+  assert.equal(notification.android.ttl, '86400s'); assert.equal(notification.android.priority, 'high');
+  assert.equal('collapse_key' in notification.android, false);
+  assert.equal(JSON.parse(calls[2].options.body).message.android.collapse_key, 'chitchat-updates');
   assert.ok(!calls[1].options.body.includes('private_key')); assert.ok(!calls[1].options.body.includes('envelope'));
   assert.equal(calls[1].options.headers.Authorization, 'Bearer synthetic-oauth-token');
-  assert.equal((await sendPush(env, 'synthetic-push-token', 'delivered', fetcher, now)).sent, false); assert.equal(calls.length, 3);
+  // Consecutive inbox hints remain independent even before either reaches the
+  // phone. Their data payload remains the same generic, content-free hint.
+  assert.equal((await sendPush(env, 'synthetic-push-token', 'inbox', fetcher, now + 2000)).sent, true);
+  const second = JSON.parse(calls[3].options.body).message;
+  assert.equal('collapse_key' in second.android, false); assert.deepEqual(second.data, { kind: 'inbox' });
+  assert.equal((await sendPush(env, 'synthetic-push-token', 'delivered', fetcher, now)).sent, false); assert.equal(calls.length, 4);
   invalidatePushCache();
   const failed = async url => url.includes('oauth2') ? Response.json({ access_token: 'synthetic', expires_in: 3600 }) : new Response(null, { status: 503 });
   assert.equal((await sendPush(env, 'synthetic-push-token', 'inbox', failed, now)).sent, false);

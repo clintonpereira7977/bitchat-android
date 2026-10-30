@@ -32,7 +32,7 @@ async function connect(who) {
 try {
   await wait(async () => { if (child.exitCode !== null) throw Error('workerd exited: ' + log); try { return (await fetch(origin + '/v1/health')).ok; } catch { return false; } }, 'local runtime');
   const home = await fetch(origin + '/'); assert.equal(home.status, 200); assert.ok((await home.text()).includes('Get the Android beta'));
-  const health = await (await fetch(origin + '/v1/health')).json(); assert.equal(health.appIntegration, 'android-beta1'); assert.equal(health.pushConfigured, false); assert.equal(health.pushPayload, 'data-only-v1');
+  const health = await (await fetch(origin + '/v1/health')).json(); assert.equal(health.appIntegration, 'android-beta1'); assert.equal(health.pushConfigured, false); assert.equal(health.pushPayload, 'data-only-v1'); assert.equal(health.version, '0.1.3'); assert.equal(health.pushDelivery, 'per-message-v1');
   const nearby = await fetch(origin + '/nearby/'); assert.equal(nearby.status, 200); assert.ok((await nearby.text()).includes('Small talk.'));
   const module = await fetch(origin + '/nearby/protocol.mjs'); assert.equal(module.status, 200); assert.ok((await module.text()).includes('ChitChat/v2'));
   const guide = await fetch(origin + '/nearby/install.html'); assert.equal(guide.status, 200); assert.equal(guide.redirected, false);

@@ -1,6 +1,8 @@
 # ChitChat beta 4: retained-alert notification handling
 
-Native Android update, version 0.3.0-beta4 / 6. No Cloudflare deployment.
+Native Android update, version 0.3.0-beta4 / 6. The native display changes need no
+Cloudflare deployment. The separate service 0.1.3 repair removes merging of
+pending inbox pushes and does require a server rollout; see REPEAT-NOTIFICATIONS.md.
 
 The owner reports beta 3 still suppresses repeat alerts while an earlier item
 remains in the tray on multiple phones. The physical cause is not established.
