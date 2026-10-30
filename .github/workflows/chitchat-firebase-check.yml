@@ -90,6 +90,20 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk dist/ChitChat-0.3-beta1.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/ChitChat-0.3-beta1.apk
           sha256sum dist/ChitChat-0.3-beta1.apk > dist/SHA256SUMS-0.3-beta1.txt
+      - name: Read public live service configuration without creating accounts
+        run: |
+          python3 - <<'PYHEALTH'
+          import json,urllib.request
+          from pathlib import Path
+          try:
+              with urllib.request.urlopen('https://chitchat-online.clintonpereira7977.workers.dev/v1/health',timeout=15) as response:
+                  data=json.loads(response.read(4096))
+              result={'reachable':True,**{k:data.get(k) for k in ['status','version','registrationConfigured','pushConfigured','pushPayload','appIntegration']}}
+          except Exception:
+              result={'reachable':False}
+          Path('dist/LIVE-SERVICE.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result))
+          PYHEALTH
       - name: Upload test evidence and installer
         if: always()
         uses: actions/upload-artifact@v4
@@ -102,6 +116,7 @@ jobs:
             chitchat/dist/ui/*.png
             chitchat/dist/ChitChat-0.3-beta1.apk
             chitchat/dist/SHA256SUMS-0.3-beta1.txt
+            chitchat/dist/LIVE-SERVICE.json
           if-no-files-found: ignore
       - name: Publish beta only after native Online and Bluetooth checks pass
         if: ${{ success() && steps.native.outcome == 'success' }}

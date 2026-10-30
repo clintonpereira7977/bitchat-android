@@ -12,7 +12,8 @@ def api(method,endpoint,body=None,optional=False):
     return json.loads(result.stdout)
 
 apk=Path('dist/ChitChat-0.3-beta1.apk')
-info={'app':'ChitChat','version':'0.3.0-beta1','package':'app.chitchat','minimumAndroid':'8.0','sourceCommit':os.environ['GITHUB_SHA'],'workflowRun':os.environ['GITHUB_RUN_ID'],'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'checks':'Native Online, notifications and Bluetooth checks passed','physicalOnlinePhonesVerified':False,'physicalNotificationsVerified':False,'permanentReleaseSigning':False,'backendNeedsLatestSource':True,'transport':['Bluetooth Nearby/v2','Internet Online/v1 (HPKE + P256 signatures)']}
+live=json.loads(Path('dist/LIVE-SERVICE.json').read_text()) if Path('dist/LIVE-SERVICE.json').is_file() else {'reachable':False}
+info={'app':'ChitChat','version':'0.3.0-beta1','package':'app.chitchat','minimumAndroid':'8.0','sourceCommit':os.environ['GITHUB_SHA'],'workflowRun':os.environ['GITHUB_RUN_ID'],'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'checks':'Native Online, notifications and Bluetooth checks passed','physicalOnlinePhonesVerified':False,'physicalNotificationsVerified':False,'permanentReleaseSigning':False,'liveService':live,'backendNeedsLatestSource':live.get('pushPayload')!='data-only-v1','transport':['Bluetooth Nearby/v2','Internet Online/v1 (HPKE + P256 signatures)']}
 Path('dist/BUILDINFO-0.3-beta1.json').write_text(json.dumps(info,indent=2)+'\n')
 Path('dist/INSTALL-ONLINE-0.3-beta1.txt').write_text(Path('docs/ONLINE-ANDROID.md').read_text())
 for path in [apk,Path('dist/SHA256SUMS-0.3-beta1.txt'),Path('dist/BUILDINFO-0.3-beta1.json'),Path('dist/INSTALL-ONLINE-0.3-beta1.txt'),*sorted(Path('dist/online-ui').glob('*.png'))]:

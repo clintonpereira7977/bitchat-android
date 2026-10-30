@@ -38,7 +38,7 @@ final class OnlineIdentity {
             handle=OnlineCrypto.newEncryptionKey();
             write(atomic,TinkProtoKeysetFormat.serializeEncryptedKeyset(handle,storage,OnlineCrypto.utf8("ChitChat-keyset/v1")));
         }
-        crypto=new OnlineCrypto(new KeyPair(keys.getCertificate(AUTH).getPublicKey(),(PrivateKey)keys.getKey(AUTH,null)),handle);
+        crypto=new OnlineCrypto(new KeyPair(keys.getCertificate(AUTH).getPublicKey(),(java.security.PrivateKey)keys.getKey(AUTH,null)),handle);
     }
     static void write(AtomicFile file,byte[] data) throws IOException {
         FileOutputStream out=null;
