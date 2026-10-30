@@ -15,7 +15,7 @@ import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public final class OnlineProtocolTest {
-    static final String RELAY="http://10.0.2.2:8787",INVITE="synthetic-client-invite";
+    static final String RELAY="http://127.0.0.1:8787",INVITE="synthetic-client-invite";
     static OnlineCrypto actor() throws Exception {
         KeyPairGenerator g=KeyPairGenerator.getInstance("EC");g.initialize(new ECGenParameterSpec("secp256r1"));
         return new OnlineCrypto(g.generateKeyPair(),OnlineCrypto.newEncryptionKey());

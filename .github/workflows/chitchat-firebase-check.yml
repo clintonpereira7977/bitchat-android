@@ -47,7 +47,14 @@ jobs:
         run: |
           cd online
           npm ci
-          node node_modules/wrangler/bin/wrangler.js dev --local --ip 127.0.0.1 --port 8787 --var PILOT_INVITE_CODE:synthetic-client-invite > "$RUNNER_TEMP/chitchat-local-relay.log" 2>&1 &
+          python3 - <<'PYRELAY'
+          import os,subprocess
+          from pathlib import Path
+          folder=Path(os.environ['RUNNER_TEMP'])
+          log=(folder/'chitchat-local-relay.log').open('wb')
+          child=subprocess.Popen(['node','node_modules/wrangler/bin/wrangler.js','dev','--local','--ip','127.0.0.1','--port','8787','--var','PILOT_INVITE_CODE:synthetic-client-invite'],stdin=subprocess.DEVNULL,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+          (folder/'chitchat-local-relay.pid').write_text(str(child.pid))
+          PYRELAY
           node --input-type=module - <<'JS'
           for(let i=0;i<100;i++){
             try{const r=await fetch('http://127.0.0.1:8787/v1/health');if(r.ok){console.log('Synthetic local relay ready');process.exit(0);}}catch{}
@@ -71,6 +78,8 @@ jobs:
           disable-animations: true
           working-directory: chitchat
           script: |
+            adb reverse tcp:8787 tcp:8787
+            adb reverse --list
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell pm grant app.chitchat android.permission.POST_NOTIFICATIONS

@@ -28,7 +28,7 @@ public final class OnlineActivity extends Activity {
     private volatile int life,chatEpoch;
     private volatile String chatId;
     private String origin=OnlineApi.PRODUCTION,nickname="Sweet Tooth",draftCode="";
-    private OnlineIdentity identity;private OnlineStore store;private OnlineApi api;
+    private OnlineIdentity identity;private OnlineStore store;private volatile OnlineApi api;
     private LinearLayout root,body,messages;private ScrollView scroller;
     private EditText composer,codeInput,inviteInput;private TextView status;
     private WebSocket socket;private int retry=1;private boolean refreshBusy,refreshAgain,metaDirty,drainBusy;
@@ -46,7 +46,7 @@ public final class OnlineActivity extends Activity {
     private interface Done<T>{void accept(T value)throws Exception;}
     @Override public void onCreate(Bundle state){
         super.onCreate(state);getWindow().setStatusBarColor(Color.BLACK);getWindow().setNavigationBarColor(Color.BLACK);
-        if(BuildConfig.DEBUG){String test=getIntent().getStringExtra("online_test_base");if(test!=null&&test.matches("http://10\\.0\\.2\\.2:[0-9]{2,5}"))origin=test;}
+        if(BuildConfig.DEBUG){String test=getIntent().getStringExtra("online_test_base");if(test!=null&&test.matches("http://(127\\.0\\.0\\.1|10\\.0\\.2\\.2):[0-9]{2,5}"))origin=test;}
         nickname=getIntent().getStringExtra("nickname");if(nickname==null||nickname.trim().isEmpty())nickname="Sweet Tooth";
         OnlineStore.lastOnline(this,true);
     }
@@ -54,8 +54,11 @@ public final class OnlineActivity extends Activity {
     @Override protected void onStart(){
         super.onStart();visible=true;foreground=true;life++;chatId=null;chatEpoch++;refreshBusy=false;drainBusy=false;refreshAgain=false;lastMeta=0;
         if(Build.VERSION.SDK_INT>=33)registerReceiver(hints,new IntentFilter(SYNC),Context.RECEIVER_NOT_EXPORTED);else registerReceiver(hints,new IntentFilter(SYNC));
-        loading();run(()->{
+        int generation=life;loading();run(()->{
             OnlineIdentity id=new OnlineIdentity(this);OnlineStore data=new OnlineStore(this,id.storage);OnlineApi transport=new OnlineApi(id.crypto,origin);
+            if(!visible||life!=generation){transport.cancel();throw new java.io.InterruptedIOException();}
+            api=transport;
+            if(!visible||life!=generation){transport.cancel();throw new java.io.InterruptedIOException();}
             if(data.registered()){
                 OnlineCrypto.Contact me=new OnlineCrypto.Contact(transport.request("GET","/v1/me",null).getJSONObject("account"));
                 OnlineCrypto.Contact own=new OnlineCrypto.Contact(id.crypto.profile(nickname));if(!own.sameKey(me))throw new java.security.GeneralSecurityException("Own key changed");
@@ -87,7 +90,7 @@ public final class OnlineActivity extends Activity {
     }
     private LinearLayout page(){ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);body.addView(scroll,new LinearLayout.LayoutParams(-1,-1));LinearLayout c=column();scroll.addView(c);return c;}
     private void modes(LinearLayout c){space(c,14);LinearLayout row=new LinearLayout(this);Button a=button("Nearby",false,this::nearby),b=button("Online",true,()->{});a.setGravity(Gravity.CENTER);b.setGravity(Gravity.CENTER);row.addView(a,new LinearLayout.LayoutParams(0,dp(48),1));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(48),1);p.leftMargin=dp(10);row.addView(b,p);c.addView(row);}
-    private void loading(){base("online");space(body,34);body.addView(text("A little closer.",38,WHITE));space(body,18);body.addView(text("Opening your Online identity…",15,DIM));}
+    private void loading(){base("online");space(body,34);body.addView(text("A little closer.",38,WHITE));space(body,18);body.addView(text("Opening your Online identity…",15,DIM));space(body,24);body.addView(button("Use Nearby",false,this::nearby));}
     private void join(){
         base("online");LinearLayout c=page();modes(c);space(c,28);c.addView(mono("INTERNET ON. HISTORY OFF.",11,DIM));space(c,18);
         TextView title=text("Small talk.\nAny distance.",46,WHITE);title.setTypeface(Typeface.create("sans-serif-light",Typeface.NORMAL));c.addView(title);space(c,18);
@@ -103,17 +106,19 @@ public final class OnlineActivity extends Activity {
     private void lobby(){
         if(chatId!=null)return;
         boolean focus=codeInput!=null&&codeInput.hasFocus();if(codeInput!=null)draftCode=codeInput.getText().toString();
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);base("online");LinearLayout c=page();modes(c);space(c,25);
-        c.addView(text("A little closer.\nFrom anywhere.",34,WHITE));space(c,18);
-        TextView id=mono("YOUR ID / "+OnlineCrypto.formattedCode(identity.crypto.code),15,WHITE);id.setTextIsSelectable(true);c.addView(id);space(c,10);
-        Button share=button("Share my ID    ↗",false,()->{Intent intent=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Find me on ChitChat: "+OnlineCrypto.formattedCode(identity.crypto.code)+" ("+nickname+"). Open Online → Add a friend.");startActivity(Intent.createChooser(intent,"Share your public ChitChat ID"));});c.addView(share);space(c,18);
-        codeInput=field("Friend’s eight-character ID","add_code",12,false);codeInput.setText(draftCode);c.addView(codeInput);space(c,10);
-        Button add=button("Add a friend    +",true,this::findFriend);add.setTag("add_friend");c.addView(add);space(c,18);
-        status=text("Messages clear here when you leave.",13,DIM);c.addView(status);space(c,16);rule(c);
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);base("online");LinearLayout c=page();modes(c);space(c,22);
+        c.addView(text("Your people.",34,WHITE));space(c,14);
+        LinearLayout identityRow=new LinearLayout(this);identityRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView id=mono("ID / "+OnlineCrypto.formattedCode(identity.crypto.code),15,WHITE);id.setTextIsSelectable(true);identityRow.addView(id,new LinearLayout.LayoutParams(0,dp(48),1));id.setGravity(Gravity.CENTER_VERTICAL);
+        Button share=button("Share",false,()->{Intent intent=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Find me on ChitChat: "+OnlineCrypto.formattedCode(identity.crypto.code)+" ("+nickname+"). Open Online → Add a friend. Android beta: https://raw.githubusercontent.com/clintonpereira7977/bitchat-android/refs/heads/codex/chitchat-download/downloads/ChitChat-0.3-beta1.apk");startActivity(Intent.createChooser(intent,"Share your public ChitChat ID"));});share.setContentDescription("Share my ChitChat ID");identityRow.addView(share,new LinearLayout.LayoutParams(dp(90),dp(48)));c.addView(identityRow);space(c,10);
+        status=text("Messages clear here when you leave.",13,DIM);c.addView(status);space(c,14);rule(c);
         if(!requests.isEmpty()){space(c,18);c.addView(mono("KNOCK KNOCK / REQUESTS",11,DIM));for(OnlineCrypto.Contact friend:requests){space(c,14);c.addView(text(friend.name+" · "+OnlineCrypto.formattedCode(friend.code),17,WHITE));space(c,8);LinearLayout row=new LinearLayout(this);Button accept=button("Accept",true,()->decide(friend,true)),decline=button("Decline",false,()->decide(friend,false));accept.setTag("accept_"+friend.id);decline.setTag("decline_"+friend.id);row.addView(accept,new LinearLayout.LayoutParams(0,dp(52),1));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(52),1);p.leftMargin=dp(10);row.addView(decline,p);c.addView(row);}}
-        space(c,20);c.addView(mono("YOUR PEOPLE",11,DIM));
+        space(c,20);c.addView(mono("SAY A LITTLE HELLO",11,DIM));
         if(contacts.isEmpty()){space(c,12);c.addView(text("A little quiet here.\nAdd a friend; chat opens after approval.",15,DIM));}
         for(OnlineCrypto.Contact friend:contacts.values()){space(c,12);int n=0;try{n=store.count(friend.id);}catch(Exception ignored){}Button open=button(friend.name+(n>0?"   · "+n+" waiting":"   ↗"),false,()->openChat(friend.id));open.setTag("chat_"+friend.id);c.addView(open);}
+        space(c,22);rule(c);space(c,18);c.addView(mono("A NEW CONNECTION",11,DIM));space(c,10);
+        codeInput=field("Friend’s eight-character ID","add_code",12,false);codeInput.setText(draftCode);c.addView(codeInput);space(c,10);
+        Button add=button("Add a friend    +",true,this::findFriend);add.setTag("add_friend");c.addView(add);
         space(c,20);Button notifications=button(OnlinePush.enabled(this)?"Notifications on · turn off":"Enable quiet notifications",false,this::notificationChoice);notifications.setTag("notifications");c.addView(notifications);space(c,10);
         c.addView(button("Refresh",false,()->requestRefresh(true)));space(c,12);TextView settings=mono("YOUR ID & PRIVACY   ↗",11,DIM);settings.setPadding(0,dp(16),0,dp(16));settings.setOnClickListener(v->account());c.addView(settings);
         if(focus){codeInput.requestFocus();codeInput.setSelection(codeInput.length());}
@@ -278,6 +283,7 @@ public final class OnlineActivity extends Activity {
         if(socket!=null){socket.cancel();socket=null;}if(api!=null)api.cancel();if(dialog!=null){dialog.dismiss();dialog=null;}
         if(composer!=null)composer.setText("");if(inviteInput!=null)inviteInput.setText("");composer=null;inviteInput=null;codeInput=null;draftCode="";displayed.clear();sends.clear();contacts=new LinkedHashMap<>();requests=new ArrayList<>();
         if(messages!=null)messages.removeAllViews();messages=null;scroller=null;if(root!=null)root.removeAllViews();status=null;
+        identity=null;store=null;api=null;
         try{unregisterReceiver(hints);}catch(IllegalArgumentException ignored){}super.onStop();
     }
     @Override protected void onDestroy(){if(api!=null)api.cancel();work.shutdownNow();super.onDestroy();}
