@@ -84,9 +84,9 @@ jobs:
             adb shell pm grant app.chitchat android.permission.POST_NOTIFICATIONS
             adb shell am instrument -w app.chitchat.test/androidx.test.runner.AndroidJUnitRunner > notification-tests.txt
             cat notification-tests.txt
-            python3 -c "from pathlib import Path; s=Path('notification-tests.txt').read_text(); assert 'OK (9 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native Online checks failed'"
             mkdir -p dist/online-ui
             adb pull /sdcard/Android/data/app.chitchat/files/. dist/online-ui/
+            python3 -c "from pathlib import Path; s=Path('notification-tests.txt').read_text(); assert 'OK (9 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native Online checks failed'"
             adb shell pm clear app.chitchat
             mkdir -p dist
             cp android/app/build/outputs/apk/debug/app-debug.apk dist/ChitChat-android.apk
@@ -121,6 +121,7 @@ jobs:
             chitchat/notification-tests.txt
             chitchat/android/app/build/reports/tests/
             chitchat/dist/online-ui/*.png
+            chitchat/dist/online-ui/*.xml
             chitchat/dist/ui/*.png
             chitchat/dist/ChitChat-0.3-beta1.apk
             chitchat/dist/SHA256SUMS-0.3-beta1.txt

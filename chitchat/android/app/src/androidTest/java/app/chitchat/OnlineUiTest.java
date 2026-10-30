@@ -46,7 +46,9 @@ public final class OnlineUiTest {
             type("composer","SYNTHETIC_OUTGOING_NOTE");click("send");type("composer","KEEP-THIS-DRAFT");
             AtomicReference<JSONObject> inbox=new AtomicReference<>();waitFor(()->{JSONArray list=peer.request("GET","/v1/inbox",null).getJSONArray("messages");if(list.length()>0)inbox.set(list.getJSONObject(0));if(inbox.get()==null)Thread.sleep(400);return inbox.get()!=null;},"outbound relay delivery");
             JSONObject message=inbox.get();OnlineCrypto.Contact sender=new OnlineCrypto.Contact(own.crypto.profile("Owner"));assertEquals("SYNTHETIC_OUTGOING_NOTE",friend.open(sender,message.getString("id"),message.getString("envelope")));peer.request("POST","/v1/messages/"+message.getString("id")+"/ack",new JSONObject());waitFor(()->text("delivered to phone"),"live delivery receipt");assertEquals("KEEP-THIS-DRAFT",value("composer"));capture("online-04-chat");
-            click("leave");UiDevice.getInstance(inst).findObject(new UiSelector().resourceId("android:id/button1")).click();waitFor(()->tag("chat_"+friend.id)!=null&&tag("composer")==null,"leave clears conversation");click("chat_"+friend.id);assertFalse(text(first));assertEquals("",value("composer"));
+            click("leave");androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withId(android.R.id.button1))
+                    .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog()).perform(androidx.test.espresso.action.ViewActions.click());
+            waitFor(()->tag("chat_"+friend.id)!=null&&tag("composer")==null,"leave clears conversation");click("chat_"+friend.id);assertFalse(text(first));assertEquals("",value("composer"));
             String third="SYNTHETIC_CLEAR_ON_BACKGROUND";String mid=UUID.randomUUID().toString();peer.request("POST","/v1/messages",new JSONObject().put("to",own.crypto.id).put("id",mid).put("envelope",friend.seal(recipient,mid,third)));waitFor(()->text(third),"second session inbound");type("composer","PRIVATE-DRAFT-MUST-CLEAR");
             assertTrue("HOME key injection failed",UiDevice.getInstance(inst).pressHome());waitFor(()->!OnlineActivity.foreground,"HOME pauses the Online screen");
             context.startActivity(new Intent(context,OnlineActivity.class).putExtra("online_test_base",OnlineProtocolTest.RELAY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP));
@@ -54,6 +56,7 @@ public final class OnlineUiTest {
             for(String pref:new String[]{OnlineStore.PREFS,OnlinePush.PREFS,"MainActivity"}){String saved=context.getSharedPreferences(pref,0).getAll().toString();assertFalse(saved.contains(first));assertFalse(saved.contains(third));assertFalse(saved.contains("PRIVATE-DRAFT-MUST-CLEAR"));}
             capture("online-05-fresh-chat");
         }finally{
+            if(activity!=null){capture("online-last-state");UiDevice.getInstance(inst).dumpWindowHierarchy(new java.io.File(context.getExternalFilesDir(null),"online-last-state.xml"));}
             try{peer.request("DELETE","/v1/me",null);}catch(Exception ignored){}
             if(activity!=null)inst.runOnMainSync(()->activity.finish());
             OnlinePush.disable(context);OnlineIdentity own=new OnlineIdentity(context);try{new OnlineApi(own.crypto,OnlineProtocolTest.RELAY).request("DELETE","/v1/me",null);}catch(Exception ignored){}new OnlineStore(context,own.storage).clear();own.destroy();OnlineStore.lastOnline(context,false);
