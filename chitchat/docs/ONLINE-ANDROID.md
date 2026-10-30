@@ -96,11 +96,12 @@ draft retention, leave/reopen and real HOME background/reopen clearing. It then
 runs the existing native Bluetooth smoke and two-emulator pair checks. These
 never use the owner's invitation, FCM sender credential or production accounts.
 
-Real phone Online delivery/notifications still require owner testing. The beta
-APK is signed with the CI debug certificate. That is not a permanent owner-held
-release key; builds from another run may not update an installed beta. Before a
-wider pilot, configure a stable private signing key in GitHub Actions secrets.
-Never commit or publish that private keystore or its passwords.
+Real phone notification delivery still requires owner testing. The original
+beta 1 and initial CI-only beta 2 used temporary debug certificates. The
+owner-signed beta 2 uses the permanent owner certificate documented below.
+Its private backup must be kept safely, and the four GitHub signing secrets
+must be configured before future CI publication. Never commit or publish that
+private keystore or its passwords. Existing beta 1 is preserved for diagnosis.
 
 Sources: https://developers.google.com/tink/hybrid and RFC9180.
 
