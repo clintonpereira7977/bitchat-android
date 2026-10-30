@@ -30,10 +30,14 @@ public final class PushIntegrationTest {
         android.service.notification.StatusBarNotification[] current;
         do {
             java.util.List<android.service.notification.StatusBarNotification> owned=new java.util.ArrayList<>();
-            for(android.service.notification.StatusBarNotification n:manager.getActiveNotifications())
-                if(n.getId()==PushNotifications.ID&&(n.getTag()==null||n.getTag().startsWith(PushNotifications.TAG_PREFIX)))owned.add(n);
+            boolean summary=false;
+            for(android.service.notification.StatusBarNotification n:manager.getActiveNotifications()){
+                if(PushNotifications.SUMMARY_TAG.equals(n.getTag()))summary=true;
+                if(n.getTag()!=null&&n.getTag().startsWith(PushNotifications.TAG_PREFIX)
+                        &&!PushNotifications.SUMMARY_TAG.equals(n.getTag()))owned.add(n);
+            }
             current=owned.toArray(new android.service.notification.StatusBarNotification[0]);
-            if (current.length == expected) return current;
+            if (current.length == expected && (expected!=0||!summary)) return current;
             android.os.SystemClock.sleep(25);
         } while (android.os.SystemClock.uptimeMillis() < deadline);
         assertEquals("Android notification state did not settle", expected, current.length);
@@ -113,11 +117,14 @@ public final class PushIntegrationTest {
             ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-2");
             android.service.notification.StatusBarNotification[] second=notifications(2);
             assertNotEquals(second[0].getTag(),second[1].getTag());
+            assertNotEquals(second[0].getId(),second[1].getId());
             assertTrue(first.equals(second[0].getTag())||first.equals(second[1].getTag()));
             ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-2");notifications(2);
             ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-3");
             for(android.service.notification.StatusBarNotification n:notifications(3)){
                 assertEquals(0,n.getNotification().flags&Notification.FLAG_ONLY_ALERT_ONCE);
+                assertEquals(PushNotifications.GROUP,n.getNotification().getGroup());
+                assertEquals(Notification.GROUP_ALERT_CHILDREN,n.getNotification().getGroupAlertBehavior());
                 assertEquals("A new message is waiting.",n.getNotification().extras.getString(Notification.EXTRA_TEXT));
             }
             String saved=context.getSharedPreferences(OnlinePush.PREFS,0).getAll().toString();
@@ -125,6 +132,61 @@ public final class PushIntegrationTest {
             PushNotifications.clear(context);notifications(0);
             ChitChatMessagingService.dispatch(context,data,"synthetic-delivery-4");notifications(1);
         } finally { OnlineActivity.foreground=foreground; }
+    }
+    @Test public void retainedNotificationsAllowFurtherChildAlertsWhileScreenIsOff() throws Exception {
+        androidx.test.uiautomator.UiDevice device=androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+        boolean foreground=OnlineActivity.foreground;
+        try {
+            OnlineActivity.foreground=false;OnlinePush.enableForRegisteredAccount(context,ACCOUNT);
+            java.util.Map<String,String> data=new java.util.HashMap<>();data.put("kind","inbox");
+            ChitChatMessagingService.dispatch(context,data,"synthetic-before-standby");
+            String retained=notifications(1)[0].getTag();
+            device.sleep();assertFalse(device.isScreenOn());
+            // Exercise the native display path with a retained tray item. This
+            // does not simulate Google delivery, Doze, or a physical sound.
+            ChitChatMessagingService.dispatch(context,data,"synthetic-in-standby-1");
+            notifications(2);
+            ChitChatMessagingService.dispatch(context,data,"synthetic-in-standby-2");
+            android.service.notification.StatusBarNotification[] children=notifications(3);
+            assertTrue(java.util.Arrays.stream(children).anyMatch(n->retained.equals(n.getTag())));
+            for(android.service.notification.StatusBarNotification child:children){
+                Notification n=child.getNotification();
+                assertEquals(PushNotifications.GROUP,n.getGroup());
+                assertEquals(Notification.GROUP_ALERT_CHILDREN,n.getGroupAlertBehavior());
+                assertEquals(0,n.flags&Notification.FLAG_ONLY_ALERT_ONCE);
+                assertEquals(0,n.flags&Notification.FLAG_GROUP_SUMMARY);
+                assertNotEquals(PushNotifications.ID,child.getId());
+            }
+            android.service.notification.StatusBarNotification summary=null;
+            for(android.service.notification.StatusBarNotification n:context.getSystemService(NotificationManager.class).getActiveNotifications())
+                if(PushNotifications.SUMMARY_TAG.equals(n.getTag()))summary=n;
+            assertNotNull(summary);
+            assertNotEquals(0,summary.getNotification().flags&Notification.FLAG_GROUP_SUMMARY);
+            assertEquals(Notification.GROUP_ALERT_CHILDREN,summary.getNotification().getGroupAlertBehavior());
+            assertEquals(3,context.getSharedPreferences(OnlinePush.PREFS,0).getLong("received_hints",0));
+            assertEquals(3,context.getSharedPreferences(OnlinePush.PREFS,0).getLong("posted_alerts",0));
+            PushNotifications.clear(context);notifications(0);
+            for(android.service.notification.StatusBarNotification n:context.getSystemService(NotificationManager.class).getActiveNotifications())
+                assertNotEquals(PushNotifications.SUMMARY_TAG,n.getTag());
+        } finally { device.wakeUp();OnlineActivity.foreground=foreground; }
+    }
+    @Test public void upgradeClearsLegacyTagsAndMutedChannelIsReported() {
+        OnlinePush.enableForRegisteredAccount(context,ACCOUNT);
+        PushNotifications.show(context,"inbox","synthetic-channel-create");notifications(1);
+        NotificationManager manager=context.getSystemService(NotificationManager.class);
+        String legacy=PushNotifications.TAG_PREFIX+"synthetic-old-child";
+        manager.notify(legacy,PushNotifications.ID,new Notification.Builder(context,PushNotifications.CHANNEL)
+                .setSmallIcon(app.chitchat.R.drawable.notification_icon).setContentTitle("ChitChat").build());
+        notifications(2);
+        PushNotifications.clear(context);notifications(0);
+        // Inspect synthetic channel objects without replacing or changing any
+        // installed channel or its persisted user choices.
+        NotificationChannel muted=new NotificationChannel("synthetic-muted","Synthetic",NotificationManager.IMPORTANCE_HIGH);
+        muted.setSound(null,null);assertNotNull(PushNotifications.channelProblem(muted));
+        NotificationChannel audible=new NotificationChannel("synthetic-audible","Synthetic",NotificationManager.IMPORTANCE_HIGH);
+        audible.setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,
+                new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT).build());
+        assertNull(PushNotifications.channelProblem(audible));
     }
     @Test public void notificationTrayIsBoundedAndOptOutClearsEveryAlert() {
         OnlinePush.enableForRegisteredAccount(context,ACCOUNT);

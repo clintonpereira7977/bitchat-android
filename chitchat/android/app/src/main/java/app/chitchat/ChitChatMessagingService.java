@@ -13,6 +13,7 @@ public final class ChitChatMessagingService extends FirebaseMessagingService {
         dispatch(context,data,null);
     }
     static void dispatch(android.content.Context context, java.util.Map<String,String> data, String deliveryId) {
+        PushNotifications.receivedHint(context);
         if(OnlineActivity.foreground && !"test".equals(data.get("kind"))){context.sendBroadcast(new android.content.Intent(OnlineActivity.SYNC).setPackage(context.getPackageName()));return;}
         PushNotifications.show(context, data.get("kind"), deliveryId);
     }

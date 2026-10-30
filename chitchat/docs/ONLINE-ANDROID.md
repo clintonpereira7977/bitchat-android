@@ -1,4 +1,4 @@
-# ChitChat Online Android beta 0.3 — beta 3 update
+# ChitChat Online Android beta 0.3 — beta 4 update
 
 This development branch adds an Online mode alongside the existing Nearby
 Bluetooth app. Both people need the new app for Online. Existing Nearby 0.2
@@ -6,14 +6,15 @@ users remain compatible with this app's unchanged Bluetooth transport.
 
 ## Install and use
 
-1. Install ChitChat-0.3-beta3.apk from the owner's shared installer or the
+1. Install ChitChat-0.3-beta4.apk from the owner's shared installer or the
    codex/chitchat-download branch. Allow installation from your Files app if
    Android asks. This APK needs Android 8+; optional notifications need Google
    Play services. No Play Store publication is required.
-2. If Android reports a signature conflict with the old Bluetooth-only test
-   build, uninstall that old build first. It only stores a nickname. After
-   creating an Online ID, uninstalling/clearing data loses that ID and contacts.
-   The pilot currently has no account recovery. Keep the APK you install.
+2. On beta 3, open the new APK and choose Update. CI verifies the new certificate
+   matches the published permanent beta 3 certificate. IDs and contacts stay
+   in place. If Android reports a signature conflict, stop and contact the owner;
+   do not uninstall or clear data. Those operations lose the Online ID and contacts.
+   Older differently signed betas need a separately agreed migration.
 3. Choose Online, enter a nickname and the private pilot invitation supplied by
    the owner. The invite is never embedded in the APK or saved by the client.
 4. Share your public eight-character ID. Your friend enters it under Add a
@@ -27,6 +28,10 @@ users remain compatible with this app's unchanged Bluetooth transport.
    closes, Online alerts are disabled locally and push unregistration is tried.
 
 ## Owner's server deployment
+
+Beta 4 changes the native notification display only. No Cloudflare deployment,
+new secrets, account reset or notification re-registration is required. The
+instructions below describe the original service setup, not an update step.
 
 Production service: https://chitchat-online.clintonpereira7977.workers.dev
 Firebase project: chitchat-2faca. Both runtime secrets were configured by the
@@ -104,6 +109,35 @@ must be configured before future CI publication. Never commit or publish that
 private keystore or its passwords. Existing beta 1 is preserved for diagnosis.
 
 Sources: https://developers.google.com/tink/hybrid and RFC9180.
+
+## Notification update: beta 4
+
+New deliveries have a fresh tag and numeric notification ID, and explicitly
+belong to an Android group whose children request sound/vibration. Its stable
+summary is silent. Up to six child alerts remain; opening Online or opting out
+clears children and summary, including beta 3 alerts retained across an update.
+The existing notification category and user-selected sound settings are kept.
+
+Online → Check notifications now shows the installed version and two local
+counters: Google push callbacks received and alerts posted. These counts contain
+no messages, contacts or tokens and are never sent to the server. They reset on
+notification opt-out. They distinguish a missing delivery from Android suppressing
+sound; neither counter proves a banner or tone occurred. The check also reports
+an explicitly silent channel. Android Do Not Disturb, notification cooldown,
+battery restrictions, connectivity and OEM policy still apply. A powered-off
+phone cannot receive a live alert.
+
+Phone verification: keep the receiver locked, leave the first notification in
+the tray and send two more messages without clearing it. Check each arrives and
+requests a fresh alert. Then open Check notifications if anything is missing.
+Emulator coverage validates native posting with the screen off and retained
+alerts; it cannot validate Google delivery or real sound on another phone.
+
+Future releases must keep this package and signing key and increase versionCode.
+Google Play can distribute automatic updates after store setup and compatible
+signing. Direct APK distribution can offer an in-app Update button, but Android
+normally requires user approval to install. This beta does not yet include an
+automatic update checker. Server-only releases are deployed once centrally.
 
 ## Notification update: beta 2
 
