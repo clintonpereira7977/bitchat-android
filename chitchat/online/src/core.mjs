@@ -93,7 +93,7 @@ export class DeliveryStore {
     if (rows.some(row => row.state === 'blocked')) return false;
     return rows.some(row => row.state === 'accepted');
   }
-  get health() { return { service: 'ChitChat delivery', version: '0.1.0', status: 'ok', queueTTLSeconds: DAY / 1000, registrationConfigured: Boolean(this.env.PILOT_INVITE_CODE), pushConfigured: Boolean(this.env.FCM_SERVICE_ACCOUNT_JSON), appIntegration: 'pending' }; }
+  get health() { return { service: 'ChitChat delivery', version: '0.1.1', status: 'ok', queueTTLSeconds: DAY / 1000, registrationConfigured: Boolean(this.env.PILOT_INVITE_CODE), pushConfigured: Boolean(this.env.FCM_SERVICE_ACCOUNT_JSON), pushPayload: 'data-only-v1', appIntegration: 'pending' }; }
   admit(ipHash) {
     const now = this.clock(), day = Math.floor(now / DAY), minute = Math.floor(now / 60000);
     this.purge();

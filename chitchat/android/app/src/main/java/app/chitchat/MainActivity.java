@@ -28,7 +28,9 @@ public final class MainActivity extends Activity implements BleLink.Listener {
     private final Handler main=new Handler(Looper.getMainLooper());
     private final Map<String,TextView> receipts=new HashMap<>(); private final Set<String> received=new HashSet<>();
     @Override public void onCreate(Bundle state) {
-        super.onCreate(state); nickname=getPreferences(0).getString("nickname",""); link=new BleLink(this,this);
+        super.onCreate(state);
+        if(OnlineStore.lastOnline(this)) { startActivity(new Intent(this,OnlineActivity.class)); finish(); return; }
+        nickname=getPreferences(0).getString("nickname",""); link=new BleLink(this,this);
         getWindow().setStatusBarColor(Color.BLACK); getWindow().setNavigationBarColor(Color.BLACK);
         home(); if(nickname.isEmpty()) main.post(this::editName);
     }
@@ -59,6 +61,10 @@ public final class MainActivity extends Activity implements BleLink.Listener {
     }
     private void home() {
         base("nearby"); ScrollView page=new ScrollView(this); page.setFillViewport(true); body.addView(page,new LinearLayout.LayoutParams(-1,-1)); LinearLayout c=column(); page.addView(c);
+        space(c,14); LinearLayout modes=new LinearLayout(this);
+        Button nearby=button("Nearby",true,()->{});nearby.setGravity(Gravity.CENTER);modes.addView(nearby,new LinearLayout.LayoutParams(0,dp(50),1));
+        Button online=button("Online",false,()->{OnlineStore.lastOnline(this,true);startActivity(new Intent(this,OnlineActivity.class).putExtra("nickname",nickname));finish();});online.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams modeParams=new LinearLayout.LayoutParams(0,dp(50),1);modeParams.leftMargin=dp(10);modes.addView(online,modeParams);c.addView(modes);
         space(c,28); c.addView(mono("OFFLINE. ON PURPOSE.",11,DIM)); space(c,22);
         TextView title=text("Small talk.\nZero signal.",49,WHITE); title.setLineSpacing(0,1.02f); title.setTypeface(Typeface.create("sans-serif-light",Typeface.NORMAL)); c.addView(title);
         space(c,14); TextView sub=text("A little closer. A little quieter.\nJust you, your friend, and Bluetooth.",16,DIM); sub.setLineSpacing(dp(5),1); c.addView(sub); space(c,28);
@@ -216,5 +222,5 @@ public final class MainActivity extends Activity implements BleLink.Listener {
     private void confirmLeave() { new AlertDialog.Builder(this).setTitle("Leave this room?").setMessage("The connection will close and this phone's messages will disappear.").setPositiveButton("Leave",(d,w)->leave()).setNegativeButton("Stay",null).show(); }
     @Override public void onBackPressed() { if(active) confirmLeave(); else super.onBackPressed(); }
     @Override protected void onStop() { super.onStop(); if(active) { leave(); } }
-    @Override protected void onDestroy() { link.stop(); resetSession(); super.onDestroy(); }
+    @Override protected void onDestroy() { if(link!=null)link.stop(); resetSession(); super.onDestroy(); }
 }

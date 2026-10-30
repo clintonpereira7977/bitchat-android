@@ -1,4 +1,4 @@
-name: Check ChitChat Android notification setup
+name: Build ChitChat Online Android beta
 on:
   workflow_dispatch:
   push:
@@ -6,13 +6,18 @@ on:
     paths:
       - 'chitchat/android/**'
       - 'chitchat/docs/FIREBASE-ANDROID.md'
+      - 'chitchat/docs/ONLINE-ANDROID.md'
+      - 'chitchat/scripts/publish-online-android.py'
+      - 'chitchat/online/**'
       - '.github/workflows/chitchat-firebase-check.yml'
 permissions:
   contents: read
 jobs:
-  android-notifications:
+  android-online:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: chitchat
@@ -22,6 +27,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
@@ -29,11 +37,28 @@ jobs:
         with:
           gradle-version: '8.9'
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Compile Firebase client resources and notification policy tests
-        run: gradle -p android --no-daemon testDebugUnitTest assembleDebug assembleDebugAndroidTest
+      - name: Check unchanged Bluetooth protocol and Android syntax
+        run: bash scripts/test.sh
+      - name: Compile production APK, debug APK and native test APK
+        run: gradle -p android --no-daemon testDebugUnitTest assembleDebug assembleRelease assembleDebugAndroidTest
+      - name: Start disposable local Cloudflare relay for synthetic clients
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          cd online
+          npm ci
+          node node_modules/wrangler/bin/wrangler.js dev --local --ip 127.0.0.1 --port 8787 --var PILOT_INVITE_CODE:synthetic-client-invite > "$RUNNER_TEMP/chitchat-local-relay.log" 2>&1 &
+          node --input-type=module - <<'JS'
+          for(let i=0;i<100;i++){
+            try{const r=await fetch('http://127.0.0.1:8787/v1/health');if(r.ok){console.log('Synthetic local relay ready');process.exit(0);}}catch{}
+            await new Promise(resolve=>setTimeout(resolve,250));
+          }
+          throw Error('Local relay did not start');
+          JS
       - name: Enable emulator acceleration
         run: sudo chmod 666 /dev/kvm
-      - name: Check opt-in controls and native notification behavior
+      - name: Check actual Online UI, encrypted relay delivery and notification controls
+        id: native
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -51,13 +76,35 @@ jobs:
             adb shell pm grant app.chitchat android.permission.POST_NOTIFICATIONS
             adb shell am instrument -w app.chitchat.test/androidx.test.runner.AndroidJUnitRunner > notification-tests.txt
             cat notification-tests.txt
-            python3 -c "from pathlib import Path; s=Path('notification-tests.txt').read_text(); assert 'OK (4 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native notification checks failed'"
-      - name: Upload test results (internal checkpoint; no public installer)
+            python3 -c "from pathlib import Path; s=Path('notification-tests.txt').read_text(); assert 'OK (9 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native Online checks failed'"
+            mkdir -p dist/online-ui
+            adb pull /sdcard/Android/data/app.chitchat/files/. dist/online-ui/
+            adb shell pm clear app.chitchat
+            mkdir -p dist
+            cp android/app/build/outputs/apk/debug/app-debug.apk dist/ChitChat-android.apk
+            python3 tests/android_smoke.py
+            python3 tests/android_ble_pair.py
+      - name: Verify production installer signature
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk dist/ChitChat-0.3-beta1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/ChitChat-0.3-beta1.apk
+          sha256sum dist/ChitChat-0.3-beta1.apk > dist/SHA256SUMS-0.3-beta1.txt
+      - name: Upload test evidence and installer
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ChitChat-Firebase-check-results
+          name: ChitChat-Online-Android-beta
           path: |
             chitchat/notification-tests.txt
             chitchat/android/app/build/reports/tests/
+            chitchat/dist/online-ui/*.png
+            chitchat/dist/ui/*.png
+            chitchat/dist/ChitChat-0.3-beta1.apk
+            chitchat/dist/SHA256SUMS-0.3-beta1.txt
           if-no-files-found: ignore
+      - name: Publish beta only after native Online and Bluetooth checks pass
+        if: ${{ success() && steps.native.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-online-android.py

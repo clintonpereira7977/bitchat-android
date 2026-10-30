@@ -7,6 +7,7 @@ import com.google.firebase.messaging.RemoteMessage;
 public final class ChitChatMessagingService extends FirebaseMessagingService {
     @Override public void onNewToken(String token) { OnlinePush.recordRotatedToken(this, token); }
     @Override public void onMessageReceived(RemoteMessage message) {
+        if(OnlineActivity.foreground){sendBroadcast(new android.content.Intent(OnlineActivity.SYNC).setPackage(getPackageName()));return;}
         PushNotifications.show(this, message.getData().get("kind"));
     }
     @Override public void onDeletedMessages() {
