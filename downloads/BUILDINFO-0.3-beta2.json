@@ -4,18 +4,17 @@
   "package": "app.chitchat",
   "minimumAndroid": "8.0",
   "sourceCommit": "39acdc97d1778d9bfb001c42704200a65091b8b8",
-  "workflowRun": "41015301222",
-  "sha256": "19ce405e8547ab43df285aa789b0b196d151d425ecf6727645861ce289a8d04f",
-  "checks": "Native Online, notifications and Bluetooth checks passed",
+  "workflowRun": 41015301222,
+  "sha256": "cdbc2003eee7f792f6a3fcf2eeab99be92ee8b6b3affe8d3a45218a23503ef8d",
+  "signingCertificateSha256": "14ee30f8a3857f05abeedd1c5068461ac878f5fe136754f3a5f4ae1b380b09e2",
+  "permanentReleaseSigning": true,
+  "signing": "Owner PKCS12, RSA3072, APK v2 and v3 verified locally; all executable/resource bytes unchanged from tested APK",
   "physicalOnlinePhonesVerified": false,
   "physicalNotificationsVerified": false,
-  "permanentReleaseSigning": false,
-  "liveService": {
-    "reachable": false
-  },
+  "existingBeta1InPlaceUpdateSupported": false,
+  "oldBeta1InstallerPreserved": true,
   "backendNeedsLatestSource": true,
-  "transport": [
-    "Bluetooth Nearby/v2",
-    "Internet Online/v1 (HPKE + P256 signatures)"
-  ]
+  "privateSigningBackup": "Provided privately to owner; never committed or uploaded to public repository",
+  "signingConfigurationCommit": "448d06a102e64ee4c7ded5e2cde38ff85aaf2df3",
+  "futureCiSigningSecretsNeedOwnerSetup": true
 }
