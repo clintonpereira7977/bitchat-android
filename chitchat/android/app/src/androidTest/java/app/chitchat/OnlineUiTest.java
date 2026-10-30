@@ -55,8 +55,17 @@ public final class OnlineUiTest {
             OnlinePush.enableForRegisteredAccount(context,own.crypto.id);
             String lobbyId=UUID.randomUUID().toString();peer.request("POST","/v1/messages",new JSONObject().put("to",own.crypto.id).put("id",lobbyId).put("envelope",friend.seal(recipient,lobbyId,"SYNTHETIC_LOBBY_ALERT")));
             android.app.NotificationManager notifications=context.getSystemService(android.app.NotificationManager.class);
-            waitFor(()->notifications.getActiveNotifications().length==1,"foreground lobby incoming-message alert");
-            assertEquals("A new message is waiting.",notifications.getActiveNotifications()[0].getNotification().extras.getString(Notification.EXTRA_TEXT));
+            waitFor(()->notifications.getActiveNotifications().length==2,"foreground lobby grouped incoming-message alert");
+            int children=0,summaries=0;
+            for(android.service.notification.StatusBarNotification posted:notifications.getActiveNotifications()){
+                Notification alert=posted.getNotification();
+                assertEquals(PushNotifications.GROUP,alert.getGroup());
+                if((alert.flags&Notification.FLAG_GROUP_SUMMARY)!=0){summaries++;continue;}
+                children++;assertEquals("A new message is waiting.",alert.extras.getString(Notification.EXTRA_TEXT));
+                assertEquals(Notification.GROUP_ALERT_CHILDREN,alert.getGroupAlertBehavior());
+                assertEquals(0,alert.flags&Notification.FLAG_ONLY_ALERT_ONCE);
+            }
+            assertEquals(1,children);assertEquals(1,summaries);
             click("chat_"+friend.id);waitFor(()->tag("composer")!=null,"conversation");waitFor(()->notifications.getActiveNotifications().length==0,"opening chat clears alert");
             String first="Synthetic hello नमस्ते 👋";String id=UUID.randomUUID().toString();peer.request("POST","/v1/messages",new JSONObject().put("to",own.crypto.id).put("id",id).put("envelope",friend.seal(recipient,id,first)));waitFor(()->text(first),"inbound decrypted message");
             assertEquals("An already-visible conversation does not need a duplicate alert",0,notifications.getActiveNotifications().length);
