@@ -1,0 +1,182 @@
+# ChitChat Online Android beta 0.3 — beta 4 update
+
+This development branch adds an Online mode alongside the existing Nearby
+Bluetooth app. Both people need the new app for Online. Existing Nearby 0.2
+users remain compatible with this app's unchanged Bluetooth transport.
+
+## Install and use
+
+1. Install ChitChat-0.3-beta4.apk from the owner's shared installer or the
+   codex/chitchat-download branch. Allow installation from your Files app if
+   Android asks. This APK needs Android 8+; optional notifications need Google
+   Play services. No Play Store publication is required.
+2. On beta 3, open the new APK and choose Update. CI verifies the new certificate
+   matches the published permanent beta 3 certificate. IDs and contacts stay
+   in place. If Android reports a signature conflict, stop and contact the owner;
+   do not uninstall or clear data. Those operations lose the Online ID and contacts.
+   Older differently signed betas need a separately agreed migration.
+3. Choose Online, enter a nickname and the private pilot invitation supplied by
+   the owner. The invite is never embedded in the APK or saved by the client.
+4. Share your public eight-character ID. Your friend enters it under Add a
+   friend. You accept or decline; chat is available only after approval.
+5. Open a contact to chat. Leaving/backgrounding clears this phone's opened
+   messages and draft. Each participant controls their own copy.
+6. Enable optional generic notifications from the Online home screen. Allow the
+   Android notification permission. Enable notifications on both real phones
+   and test a message while the recipient has backgrounded the app.
+7. Switch to Nearby for Bluetooth-only interaction. The Online event connection
+   closes, Online alerts are disabled locally and push unregistration is tried.
+
+## Owner's server deployment
+
+Beta 4 changes the native notification display only. No Cloudflare deployment,
+new secrets, account reset or notification re-registration is required. The
+instructions below describe the original service setup, not an update step.
+
+Production service: https://chitchat-online.clintonpereira7977.workers.dev
+Firebase project: chitchat-2faca. Both runtime secrets were configured by the
+owner using Work; that confirms presence, not notification delivery.
+
+Deploy the latest codex/chitchat-online backend source, preserving the existing
+runtime FCM_SERVICE_ACCOUNT_JSON and PILOT_INVITE_CODE secrets. The new health
+field pushPayload must equal data-only-v1 before the app enables push. This
+prevents provider-rendered background notifications from bypassing app opt-out.
+
+If the Cloudflare build root is /, its existing fallback deploy command is:
+
+    git fetch origin codex/chitchat-online && git checkout --detach FETCH_HEAD && cd chitchat/online && npm ci && npm run deploy
+
+If the build root is chitchat/online and production branch codex/chitchat-online,
+use npm run deploy. Do not combine that root with the fallback cd command.
+Rebuild from source; redeploying an old saved version does not fetch new code.
+
+## Encryption and identity
+
+- Message confidentiality uses Google Tink 1.24 HPKE, RFC9180:
+  X25519/HKDF-SHA256/AES-256-GCM, no Tink output prefix.
+- A separate Android Keystore P256 identity signs the public HPKE key bundle,
+  every HTTP request, and every ciphertext with sender/recipient/message-ID
+  context. The backend cannot replace a public decryption key without breaking
+  its identity signature. Public IDs/codes derive from the identity key.
+- The client validates signatures, identity hashes, code derivation and allowed
+  HPKE parameters. Contacts must be explicitly pinned on request/accept. A key
+  change pauses the contact instead of silently replacing the pin. Compare the
+  full two-person safety number out of band to verify identity.
+- This is not Signal, a double ratchet, key transparency or independent security
+  review. Static recipient keys do not provide forward secrecy against future
+  device key compromise. Human identity is not verified by a nickname or server.
+- The HPKE private keyset is encrypted with Tink's Android Keystore Aead and
+  stored using AtomicFile in noBackupFilesDir. The signing private key is
+  non-exportable. Keystore failure fails closed; no plaintext-key fallback.
+
+## Delivery, clearing, and privacy limits
+
+Unopened ciphertext is staged in an encrypted phone spool before recipient ACK
+removes it from the relay. This lets one friend's backlog avoid blocking another
+friend's messages. Both relay and phone enforce the original expiry, at most
+24 hours. The phone stores at most 200 unopened envelopes and a bounded expiring
+dedup ledger. Opened ciphertext is removed; plaintext/drafts are never written
+to preferences or a transcript database. Normal process memory, keyboards,
+malicious apps, cameras and provider/device backups preclude absolute-erasure
+claims. A participant leaving does not remotely wipe another device.
+
+The client closes WebSockets on background, uses generic optional FCM hints,
+fetches an authenticated inbox in foreground and clears visible chat onStop.
+Production chat windows use Android FLAG_SECURE; synthetic debug screenshots
+are allowed. Live receipts mean delivery to encrypted phone storage, not reading.
+Failed sends retry with the original message UUID and envelope; they are never
+silently replaced with a fresh send. Contacts/identity survive restarts locally.
+
+The Nearby transport and cryptographic files are preserved from verified v0.2;
+the separate unshipped BLE reconnect patch is not included. After opting into
+FCM, Android's shared Google Play services connection can still exist while
+Nearby is active; the app disables its own Online alerts and connections.
+
+## Validation and release status
+
+CI runs the unchanged Bluetooth protocol tests, notification policy tests, native
+Keystore/encryption/real local workerd signed-API checks, and a synthetic native
+UI flow: signup, incoming request/accept, two-way Unicode messages, live receipt,
+draft retention, leave/reopen and real HOME background/reopen clearing. It then
+runs the existing native Bluetooth smoke and two-emulator pair checks. These
+never use the owner's invitation, FCM sender credential or production accounts.
+
+Real phone notification delivery still requires owner testing. The original
+beta 1 and initial CI-only beta 2 used temporary debug certificates. The
+owner-signed beta 2 uses the permanent owner certificate documented below.
+Its private backup must be kept safely, and the four GitHub signing secrets
+must be configured before future CI publication. Never commit or publish that
+private keystore or its passwords. Existing beta 1 is preserved for diagnosis.
+
+Sources: https://developers.google.com/tink/hybrid and RFC9180.
+
+## Notification update: beta 4
+
+New deliveries have a fresh tag and numeric notification ID, and explicitly
+belong to an Android group whose children request sound/vibration. Its stable
+summary is silent. Up to six child alerts remain; opening Online or opting out
+clears children and summary, including beta 3 alerts retained across an update.
+The existing notification category and user-selected sound settings are kept.
+
+Online → Check notifications now shows the installed version and two local
+counters: Google push callbacks received and alerts posted. These counts contain
+no messages, contacts or tokens and are never sent to the server. They reset on
+notification opt-out. They distinguish a missing delivery from Android suppressing
+sound; neither counter proves a banner or tone occurred. The check also reports
+an explicitly silent channel. Android Do Not Disturb, notification cooldown,
+battery restrictions, connectivity and OEM policy still apply. A powered-off
+phone cannot receive a live alert.
+
+Phone verification: keep the receiver locked, leave the first notification in
+the tray and send two more messages without clearing it. Check each arrives and
+requests a fresh alert. Then open Check notifications if anything is missing.
+Emulator coverage validates native posting with the screen off and retained
+alerts; it cannot validate Google delivery or real sound on another phone.
+
+Future releases must keep this package and signing key and increase versionCode.
+Google Play can distribute automatic updates after store setup and compatible
+signing. Direct APK distribution can offer an in-app Update button, but Android
+normally requires user approval to install. This beta does not yet include an
+automatic update checker. Server-only releases are deployed once centrally.
+
+## Notification update: beta 2
+
+The current owner-reported beta 1 can be kept installed while diagnosing push.
+Deploy the latest server, then turn notifications off and on once on the phone.
+Token setup now validates the request with Google. The public health check's
+pushDiagnostics is v1; pushLastResult is a fixed provider result code with no
+account, token, request contents or provider error text. ACCEPTED means Google
+accepted a request, not that Android displayed it. No sender errors are hidden
+behind the configuration-presence flag. Existing beta 1 message APIs still work.
+
+Beta 2 adds honest registration status, notification settings checks, an
+account-authenticated Send test button, audible/vibrating repeat alerts and
+foreground alerts for incoming messages outside the visible conversation.
+The test arrives through FCM even while the app is open. Message text stays out
+of FCM and notification previews. Nearby opt-out remains immediate.
+
+IMPORTANT: beta 1 was signed with an ephemeral CI debug certificate, which was
+not preserved as a release secret. This beta 2 cannot be promised as an in-place
+update to an installed beta 1. Do not tell an existing user to uninstall or clear
+data merely to test push: it loses their ID and contacts. Diagnose the existing
+server first. Before any migration to a replacement install, configure a permanent
+owner signing key and explicitly agree how to reconnect existing contacts.
+The beta 1 public APK and its metadata are preserved. Beta 2 is a separate
+private-pilot diagnostic build; no physical FCM delivery has been verified in CI.
+
+### Permanent owner signing
+
+The owner-signed diagnostic APK was re-signed locally from the fully tested
+beta 2 APK with a newly generated permanent owner key. APK v2/v3 signatures
+were verified and every executable/resource/manifest byte matches CI. Its
+public certificate SHA-256 is:
+14ee30f8a3857f05abeedd1c5068461ac878f5fe136754f3a5f4ae1b380b09e2
+
+The private PKCS12 and four GitHub secret values are provided only in the
+owner's private backup, never in the repository. Configure the four secrets
+CHITCHAT_KEYSTORE_B64, CHITCHAT_KEYSTORE_PASSWORD, CHITCHAT_KEY_ALIAS and
+CHITCHAT_KEY_PASSWORD together. Gradle signs release builds with that key when
+configured. CI still runs without credentials, but publishing an installer
+requires the permanent key. This prevents another transient CI signer from
+replacing the public installer. Old beta 1 needs a one-time fresh identity
+if the owner later agrees to migrate; server diagnostics work without it.
