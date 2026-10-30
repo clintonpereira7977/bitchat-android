@@ -277,6 +277,12 @@ public final class OnlineActivity extends Activity {
     private void error(Exception failure){String message=OnlineApi.friendly(failure);if(status!=null)status.setText(message);notice(message);}
     private void notice(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
     @Override public void onBackPressed(){if(chatId!=null)confirmLeave();else finishAffinity();}
+    @Override protected void onPause(){
+        // HOME, app switching and system overlays can pause an Activity before
+        // Android stops it. Clear the opened view at the earlier boundary.
+        foreground=false;if(chatId!=null)closeChat();super.onPause();
+    }
+    @Override protected void onResume(){super.onResume();foreground=visible;if(visible&&store!=null&&store.registered())requestRefresh(true);}
     @Override protected void onSaveInstanceState(Bundle state){/* No drafts, transcript or private invite in saved state. */super.onSaveInstanceState(new Bundle());}
     @Override protected void onStop(){
         visible=false;foreground=false;life++;chatEpoch++;chatId=null;main.removeCallbacksAndMessages(null);
