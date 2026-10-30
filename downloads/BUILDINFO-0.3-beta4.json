@@ -1,0 +1,27 @@
+{
+  "app": "ChitChat",
+  "version": "0.3.0-beta4",
+  "versionCode": 6,
+  "package": "app.chitchat",
+  "minimumAndroid": "8.0",
+  "sourceCommit": "0b173674e8047ce270af856ca2fa3f73af79d905",
+  "workflowRun": "41050150225",
+  "sha256": "d21ebf83f476dc53eee634d686ef7f71185d8c8c4c722db6c889665eff83de2a",
+  "checks": "Native Online, notifications and Bluetooth checks passed",
+  "physicalOnlinePhonesVerified": false,
+  "physicalNotificationsVerified": false,
+  "permanentReleaseSigning": true,
+  "updateSignature": {
+    "sameSignerAsBeta3": true,
+    "certificateSHA256": "a0f04e31c7b013a24b72bfd00d3f8b4473de256c6b10a3d3f02009084f8d10bb",
+    "baseline": "ChitChat-0.3-beta3.apk"
+  },
+  "liveService": {
+    "reachable": false
+  },
+  "backendDeploymentRequired": false,
+  "transport": [
+    "Bluetooth Nearby/v2",
+    "Internet Online/v1 (HPKE + P256 signatures)"
+  ]
+}
