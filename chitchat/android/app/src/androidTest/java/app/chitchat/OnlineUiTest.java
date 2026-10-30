@@ -33,6 +33,16 @@ public final class OnlineUiTest {
     private boolean hasText(View root,String expected){if(root instanceof TextView&&((TextView)root).getText().toString().contains(expected))return true;if(root instanceof ViewGroup){ViewGroup group=(ViewGroup)root;for(int i=0;i<group.getChildCount();i++)if(hasText(group.getChildAt(i),expected))return true;}return false;}
     private void capture(String name){UiDevice.getInstance(inst).takeScreenshot(new java.io.File(context.getExternalFilesDir(null),name+".png"));}
     private void resumedOnline(){inst.runOnMainSync(()->{for(Activity a:ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED))if(a instanceof OnlineActivity)activity=(OnlineActivity)a;});}
+    private void acceptLeaveDialog()throws Exception{
+        // The fixture already drives native buttons on the UI thread. Use the
+        // displayed dialog's own button too; Espresso's root-focus heuristic is
+        // unreliable while Android removes an earlier heads-up notification.
+        // Reflection stays in the test APK; no production test hook is added.
+        java.lang.reflect.Field field=OnlineActivity.class.getDeclaredField("dialog");field.setAccessible(true);
+        AtomicReference<AlertDialog> shown=new AtomicReference<>();
+        waitFor(()->{inst.runOnMainSync(()->{try{AlertDialog dialog=(AlertDialog)field.get(activity);if(dialog!=null&&dialog.isShowing()&&dialog.getButton(AlertDialog.BUTTON_POSITIVE)!=null)shown.set(dialog);}catch(IllegalAccessException e){throw new AssertionError(e);}});return shown.get()!=null;},"displayed leave confirmation");
+        inst.runOnMainSync(()->{AlertDialog dialog=shown.get();Button button=dialog.getButton(AlertDialog.BUTTON_POSITIVE);assertTrue(dialog.isShowing());assertEquals("Leave",button.getText().toString());assertTrue(button.isEnabled());assertTrue(button.performClick());});
+    }
     @Test public void signupApproveChatDeliveryDraftLeaveAndBackgroundAreUsable()throws Exception{
         OnlineCrypto friend=OnlineProtocolTest.actor();OnlineApi peer=new OnlineApi(friend,OnlineProtocolTest.RELAY);OnlineProtocolTest.register(peer,"Test Friend");
         try{
@@ -54,8 +64,7 @@ public final class OnlineUiTest {
             type("composer","SYNTHETIC_OUTGOING_NOTE");click("send");type("composer","KEEP-THIS-DRAFT");
             AtomicReference<JSONObject> inbox=new AtomicReference<>();waitFor(()->{JSONArray list=peer.request("GET","/v1/inbox",null).getJSONArray("messages");if(list.length()>0)inbox.set(list.getJSONObject(0));if(inbox.get()==null)Thread.sleep(400);return inbox.get()!=null;},"outbound relay delivery");
             JSONObject message=inbox.get();OnlineCrypto.Contact sender=new OnlineCrypto.Contact(own.crypto.profile("Owner"));assertEquals("SYNTHETIC_OUTGOING_NOTE",friend.open(sender,message.getString("id"),message.getString("envelope")));peer.request("POST","/v1/messages/"+message.getString("id")+"/ack",new JSONObject());waitFor(()->text("delivered to phone"),"live delivery receipt");assertEquals("KEEP-THIS-DRAFT",value("composer"));capture("online-04-chat");
-            click("leave");androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withId(android.R.id.button1))
-                    .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog()).perform(androidx.test.espresso.action.ViewActions.click());
+            click("leave");acceptLeaveDialog();
             waitFor(()->tag("chat_"+friend.id)!=null&&tag("composer")==null,"leave clears conversation");click("chat_"+friend.id);assertFalse(text(first));assertEquals("",value("composer"));
             String third="SYNTHETIC_CLEAR_ON_BACKGROUND";String mid=UUID.randomUUID().toString();peer.request("POST","/v1/messages",new JSONObject().put("to",own.crypto.id).put("id",mid).put("envelope",friend.seal(recipient,mid,third)));waitFor(()->text(third),"second session inbound");type("composer","PRIVATE-DRAFT-MUST-CLEAR");
             assertTrue("HOME key injection failed",UiDevice.getInstance(inst).pressHome());waitFor(()->!OnlineActivity.foreground,"HOME pauses the Online screen");
