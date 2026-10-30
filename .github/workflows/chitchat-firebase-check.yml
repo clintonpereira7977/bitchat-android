@@ -103,11 +103,21 @@ jobs:
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell pm grant app.chitchat android.permission.POST_NOTIFICATIONS
-            adb shell am instrument -w app.chitchat.test/androidx.test.runner.AndroidJUnitRunner > notification-tests.txt
+            adb shell am instrument -w -e class app.chitchat.NearbyUiTest app.chitchat.test/androidx.test.runner.AndroidJUnitRunner > nearby-ui-tests.txt
+            cat nearby-ui-tests.txt
+            mkdir -p dist/online-ui
+            adb pull /sdcard/Android/data/app.chitchat/files/. dist/online-ui/
+            python3 -c "from pathlib import Path; s=Path('nearby-ui-tests.txt').read_text(); assert 'OK (2 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native Nearby layout checks failed'"
+            adb shell am force-stop app.chitchat
+            adb shell wm size reset
+            adb shell settings put system font_scale 1.0
+            adb shell pm clear app.chitchat
+            adb shell pm grant app.chitchat android.permission.POST_NOTIFICATIONS
+            adb shell am instrument -w -e notClass app.chitchat.NearbyUiTest app.chitchat.test/androidx.test.runner.AndroidJUnitRunner > notification-tests.txt
             cat notification-tests.txt
             mkdir -p dist/online-ui
             adb pull /sdcard/Android/data/app.chitchat/files/. dist/online-ui/
-            python3 -c "from pathlib import Path; s=Path('notification-tests.txt').read_text(); assert 'OK (15 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native Online checks failed'"
+            python3 -c "from pathlib import Path; s=Path('notification-tests.txt').read_text(); assert 'OK (13 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native Online checks failed'"
             adb shell pm clear app.chitchat
             mkdir -p dist
             cp android/app/build/outputs/apk/debug/app-debug.apk dist/ChitChat-android.apk
@@ -140,6 +150,7 @@ jobs:
           name: ChitChat-Online-Android-beta
           path: |
             chitchat/notification-tests.txt
+            chitchat/nearby-ui-tests.txt
             chitchat/android/app/build/reports/tests/
             chitchat/dist/online-ui/*.png
             chitchat/dist/online-ui/*.xml
