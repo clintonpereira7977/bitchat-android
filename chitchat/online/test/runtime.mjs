@@ -39,6 +39,9 @@ try {
   const iphone = await fetch(origin + '/nearby/downloads/ChitChat-iPhone-unsigned.ipa'); assert.equal(iphone.status, 200); assert.ok((await iphone.arrayBuffer()).byteLength > 100000);
   const preflight = await fetch(origin + '/v1/messages', { method: 'OPTIONS', headers: { Origin: 'https://synthetic-client.test', 'Access-Control-Request-Method': 'POST' } }); assert.equal(preflight.status, 204); assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), '*');
   const a = await actor(), b = await actor(); await register(a); await register(b);
+  const pushSetup=await request(a,'PUT','/v1/push',{token:'synthetic-runtime-device-token'});assert.equal(pushSetup.status,200);
+  const pushStatus=await request(a,'GET','/v1/push/status');assert.equal(pushStatus.body.registered,true);assert.equal(pushStatus.body.result,'NOT_CHECKED');
+  const pushTest=await request(a,'POST','/v1/push/test',{});assert.equal(pushTest.body.accepted,false);assert.equal(pushTest.body.result,'NOT_CONFIGURED');
   const owner = await connect(b), sender = await connect(a);
   let r = await request(a, 'POST', '/v1/requests', { code: b.account.code }); assert.equal(r.status, 201);
   await wait(() => owner.events.some(e => e.type === 'requests'), 'request notification');

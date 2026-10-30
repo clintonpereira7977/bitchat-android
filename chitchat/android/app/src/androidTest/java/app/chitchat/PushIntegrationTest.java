@@ -60,11 +60,15 @@ public final class PushIntegrationTest {
     }
     @Test public void tokenRotationIsAccountBoundAndOptOutClearsEverything() {
         OnlinePush.enableForRegisteredAccount(context, ACCOUNT);
+        assertFalse(OnlinePush.ready(context));
         OnlinePush.recordRotatedToken(context, "synthetic-registration-token-00001");
         assertEquals("synthetic-registration-token-00001", OnlinePush.pendingToken(context));
         OnlinePush.recordRotatedToken(context, "synthetic-registration-token-00002");
         OnlinePush.acknowledgeToken(context, "synthetic-registration-token-00001");
         assertEquals("synthetic-registration-token-00002", OnlinePush.pendingToken(context));
+        assertFalse(OnlinePush.ready(context));
+        OnlinePush.acknowledgeToken(context,"synthetic-registration-token-00002");assertTrue(OnlinePush.ready(context));
+        OnlinePush.recordRotatedToken(context,"synthetic-registration-token-00004");assertFalse(OnlinePush.ready(context));
         OnlinePush.enableForRegisteredAccount(context, "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
         assertEquals("", OnlinePush.pendingToken(context));
         OnlinePush.recordRotatedToken(context, "synthetic-registration-token-00003");
@@ -72,6 +76,29 @@ public final class PushIntegrationTest {
         assertFalse(OnlinePush.enabled(context)); assertEquals("", OnlinePush.pendingToken(context));
         assertEquals(0, context.getSharedPreferences(OnlinePush.PREFS, 0).getAll().size());
         assertFalse(FirebaseMessaging.getInstance().isAutoInitEnabled());
+    }
+    @Test public void backgroundPushHintsCreateRealAndroidNotificationsButOptOutSuppressesThem() {
+        boolean foreground=OnlineActivity.foreground;
+        try{
+            OnlineActivity.foreground=false;OnlinePush.enableForRegisteredAccount(context,ACCOUNT);
+            java.util.Map<String,String> data=new java.util.HashMap<>();data.put("kind","inbox");data.put("body","PRIVATE_UNTRUSTED_CHAT_TEXT");
+            ChitChatMessagingService.dispatch(context,data);
+            Notification first=notifications(1)[0].getNotification();assertEquals("A new message is waiting.",first.extras.getString(Notification.EXTRA_TEXT));
+            assertEquals(0,first.flags&Notification.FLAG_ONLY_ALERT_ONCE);
+            PushNotifications.clear(context);notifications(0);OnlinePush.disable(context);
+            ChitChatMessagingService.dispatch(context,data);notifications(0);
+        }finally{OnlineActivity.foreground=foreground;}
+    }
+    @Test public void foregroundTestHintCanDisplayAndAndroidAlertSettingsAreChecked() {
+        boolean foreground=OnlineActivity.foreground;NotificationManager manager=context.getSystemService(NotificationManager.class);
+        try{
+            OnlineActivity.foreground=true;OnlinePush.enableForRegisteredAccount(context,ACCOUNT);
+            java.util.Map<String,String> data=new java.util.HashMap<>();data.put("kind","test");ChitChatMessagingService.dispatch(context,data);
+            assertEquals("This is a ChitChat notification test.",notifications(1)[0].getNotification().extras.getString(Notification.EXTRA_TEXT));
+            assertNull(PushNotifications.problem(context));
+            assertEquals(NotificationManager.IMPORTANCE_HIGH,manager.getNotificationChannel(PushNotifications.CHANNEL).getImportance());
+            assertTrue(manager.getNotificationChannel(PushNotifications.CHANNEL).shouldVibrate());
+        }finally{OnlineActivity.foreground=foreground;}
     }
     @Test public void notificationsNeverContainUntrustedContentAndHaveImmutableOpenIntent() throws Exception {
         OnlinePush.enableForRegisteredAccount(context, ACCOUNT);

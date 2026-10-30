@@ -4,7 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import com.google.firebase.messaging.FirebaseMessaging;
 
-/** Notification plumbing for the forthcoming signed-in Online client. The
+/** Notification plumbing for the signed-in Online client. The
  * Bluetooth Activity deliberately never calls enableForRegisteredAccount.
  * FCM auto-init stays OFF even after opt-in; refresh explicitly on foreground
  * Online sessions. A failed or denied notification setup never blocks chat. */
@@ -17,6 +17,10 @@ final class OnlinePush {
     static synchronized boolean enabled(Context context) {
         return prefs(context).getBoolean("enabled", false)
                 && !prefs(context).getString("account", "").isEmpty();
+    }
+    static synchronized boolean ready(Context context) {
+        return enabled(context) && !prefs(context).getString("registered_token", "").isEmpty()
+                && prefs(context).getString("pending_token", "").isEmpty();
     }
     static synchronized void enableForRegisteredAccount(Context context, String account) {
         if (account == null || !account.matches("[A-Za-z0-9_-]{43}"))
@@ -32,16 +36,23 @@ final class OnlinePush {
         PushNotifications.clear(context);
     }
     static synchronized void recordRotatedToken(Context context, String token) {
-        if (enabled(context) && validToken(token))
-            prefs(context).edit().putString("pending_token", token).apply();
-        // A future foreground signed Online client uploads pending_token.
+        if (enabled(context) && validToken(token)) {
+            SharedPreferences.Editor edit = prefs(context).edit().putString("pending_token", token);
+            if (!fingerprint(token).equals(prefs(context).getString("registered_token", ""))) edit.remove("registered_token");
+            edit.apply();
+        }
+        // The foreground signed Online client uploads pending_token.
         // A push callback never registers an anonymous or different account.
     }
     static synchronized String pendingToken(Context context) {
         return enabled(context) ? prefs(context).getString("pending_token", "") : "";
     }
     static synchronized void acknowledgeToken(Context context, String token) {
-        if (token.equals(pendingToken(context))) prefs(context).edit().remove("pending_token").apply();
+        if (token.equals(pendingToken(context))) prefs(context).edit().remove("pending_token").putString("registered_token", fingerprint(token)).apply();
+    }
+    private static String fingerprint(String token) {
+        try { return OnlineCrypto.b64(OnlineCrypto.hash(OnlineCrypto.utf8(token))); }
+        catch (Exception impossible) { throw new IllegalStateException(impossible); }
     }
     static void requestToken(Context context, TokenResult result) {
         Context app = context.getApplicationContext();

@@ -1,4 +1,4 @@
-# ChitChat Online Android beta 0.3
+# ChitChat Online Android beta 0.3 — notification update
 
 This development branch adds an Online mode alongside the existing Nearby
 Bluetooth app. Both people need the new app for Online. Existing Nearby 0.2
@@ -6,7 +6,7 @@ users remain compatible with this app's unchanged Bluetooth transport.
 
 ## Install and use
 
-1. Install ChitChat-0.3-beta1.apk from the owner's shared installer or the
+1. Install ChitChat-0.3-beta2.apk from the owner's shared installer or the
    codex/chitchat-download branch. Allow installation from your Files app if
    Android asks. This APK needs Android 8+; optional notifications need Google
    Play services. No Play Store publication is required.
@@ -103,3 +103,28 @@ wider pilot, configure a stable private signing key in GitHub Actions secrets.
 Never commit or publish that private keystore or its passwords.
 
 Sources: https://developers.google.com/tink/hybrid and RFC9180.
+
+## Notification update: beta 2
+
+The current owner-reported beta 1 can be kept installed while diagnosing push.
+Deploy the latest server, then turn notifications off and on once on the phone.
+Token setup now validates the request with Google. The public health check's
+pushDiagnostics is v1; pushLastResult is a fixed provider result code with no
+account, token, request contents or provider error text. ACCEPTED means Google
+accepted a request, not that Android displayed it. No sender errors are hidden
+behind the configuration-presence flag. Existing beta 1 message APIs still work.
+
+Beta 2 adds honest registration status, notification settings checks, an
+account-authenticated Send test button, audible/vibrating repeat alerts and
+foreground alerts for incoming messages outside the visible conversation.
+The test arrives through FCM even while the app is open. Message text stays out
+of FCM and notification previews. Nearby opt-out remains immediate.
+
+IMPORTANT: beta 1 was signed with an ephemeral CI debug certificate, which was
+not preserved as a release secret. This beta 2 cannot be promised as an in-place
+update to an installed beta 1. Do not tell an existing user to uninstall or clear
+data merely to test push: it loses their ID and contacts. Diagnose the existing
+server first. Before any migration to a replacement install, configure a permanent
+owner signing key and explicitly agree how to reconnect existing contacts.
+The beta 1 public APK and its metadata are preserved. Beta 2 is a separate
+private-pilot diagnostic build; no physical FCM delivery has been verified in CI.

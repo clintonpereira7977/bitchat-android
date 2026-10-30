@@ -23,19 +23,34 @@ async function accessToken(raw, fetcher, now) {
   cached = { source: raw, token: token.access_token, project: account.project_id, expires: now + Math.min(token.expires_in, 3600) * 1000 };
   return cached.token;
 }
-export async function sendPush(env, token, kind, fetcher = fetch, now = Date.now()) {
-  if (!env.FCM_SERVICE_ACCOUNT_JSON || !token || !['inbox', 'requests', 'contacts'].includes(kind)) return { sent: false, configured: Boolean(env.FCM_SERVICE_ACCOUNT_JSON) };
+const FAILURE_CODES = new Set(['UNREGISTERED', 'SENDER_ID_MISMATCH', 'PERMISSION_DENIED', 'UNAUTHENTICATED', 'QUOTA_EXCEEDED', 'UNAVAILABLE', 'INTERNAL', 'INVALID_ARGUMENT']);
+async function failureCode(response) {
+  // Never retain or return Google's free-text response: it can contain tokens,
+  // project details and credential information. Only allow fixed error codes.
   try {
+    const error = (await response.json()).error;
+    const detail = error?.details?.find(d => d['@type'] === 'type.googleapis.com/google.firebase.fcm.v1.FcmError')?.errorCode;
+    if (FAILURE_CODES.has(detail)) return detail;
+    if (FAILURE_CODES.has(error?.status)) return error.status;
+  } catch {}
+  return response.status === 403 ? 'PERMISSION_DENIED' : response.status === 401 ? 'UNAUTHENTICATED' : 'PROVIDER_UNAVAILABLE';
+}
+export async function sendPush(env, token, kind, fetcher = fetch, now = Date.now(), validateOnly = false) {
+  if (!env.FCM_SERVICE_ACCOUNT_JSON || !token || !['inbox', 'requests', 'contacts', 'test'].includes(kind)) return { sent: false, configured: Boolean(env.FCM_SERVICE_ACCOUNT_JSON), code: !env.FCM_SERVICE_ACCOUNT_JSON ? 'NOT_CONFIGURED' : !token ? 'NO_DEVICE_TOKEN' : 'UNSUPPORTED_KIND' };
+  try {
+    let configuration;
+    try { configuration = JSON.parse(env.FCM_SERVICE_ACCOUNT_JSON); } catch { return { sent: false, configured: true, code: 'INVALID_CONFIGURATION' }; }
+    if (!configuration || typeof configuration.project_id !== 'string' || typeof configuration.client_email !== 'string' || typeof configuration.private_key !== 'string') return { sent: false, configured: true, code: 'INVALID_CONFIGURATION' };
     const bearer = await accessToken(env.FCM_SERVICE_ACCOUNT_JSON, fetcher, now);
     const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(cached.project)}/messages:send`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + bearer }, signal: AbortSignal.timeout(5000),
       // Data-only hints let the app recheck Online consent before displaying a
       // locally generated generic notification. Provider-rendered notification
       // payloads can bypass that check while Android has backgrounded the app.
-      body: JSON.stringify({ message: { token, data: { kind }, android: { priority: 'high', ttl: '86400s', collapse_key: 'chitchat-inbox' } } })
+      body: JSON.stringify({ ...(validateOnly ? { validate_only: true } : {}), message: { token, data: { kind }, android: { priority: 'high', ttl: '86400s', collapse_key: 'chitchat-inbox' } } })
     });
     if (response.status === 401) invalidatePushCache();
     // A provider accepting a request is not proof that a notification was shown.
-    return { sent: response.ok, configured: true };
-  } catch { return { sent: false, configured: true }; }
+    return { sent: response.ok, configured: true, code: response.ok ? 'ACCEPTED' : await failureCode(response) };
+  } catch (error) { return { sent: false, configured: true, code: error?.message === 'Push authentication unavailable' ? 'AUTHENTICATION_FAILED' : 'PROVIDER_UNAVAILABLE' }; }
 }

@@ -41,8 +41,16 @@ public final class OnlineUiTest {
             activity=(OnlineActivity)inst.startActivitySync(intent);
             waitFor(()->tag("register")!=null,"private pilot signup");capture("online-01-join");type("nickname","Test Owner");type("invite",OnlineProtocolTest.INVITE);click("register");waitFor(()->tag("add_friend")!=null,"registered lobby");
             OnlineIdentity own=new OnlineIdentity(context);OnlineCrypto.Contact recipient=new OnlineCrypto.Contact(own.crypto.profile("Test Owner"));
-            peer.request("POST","/v1/requests",new JSONObject().put("code",own.crypto.code));waitFor(()->tag("accept_"+friend.id)!=null,"incoming approval request");capture("online-02-request");click("accept_"+friend.id);waitFor(()->tag("chat_"+friend.id)!=null,"approved contact");capture("online-03-people");click("chat_"+friend.id);waitFor(()->tag("composer")!=null,"conversation");
+            peer.request("POST","/v1/requests",new JSONObject().put("code",own.crypto.code));waitFor(()->tag("accept_"+friend.id)!=null,"incoming approval request");capture("online-02-request");click("accept_"+friend.id);waitFor(()->tag("chat_"+friend.id)!=null,"approved contact");capture("online-03-people");
+            OnlinePush.enableForRegisteredAccount(context,own.crypto.id);
+            String lobbyId=UUID.randomUUID().toString();peer.request("POST","/v1/messages",new JSONObject().put("to",own.crypto.id).put("id",lobbyId).put("envelope",friend.seal(recipient,lobbyId,"SYNTHETIC_LOBBY_ALERT")));
+            android.app.NotificationManager notifications=context.getSystemService(android.app.NotificationManager.class);
+            waitFor(()->notifications.getActiveNotifications().length==1,"foreground lobby incoming-message alert");
+            assertEquals("A new message is waiting.",notifications.getActiveNotifications()[0].getNotification().extras.getString(Notification.EXTRA_TEXT));
+            click("chat_"+friend.id);waitFor(()->tag("composer")!=null,"conversation");waitFor(()->notifications.getActiveNotifications().length==0,"opening chat clears alert");
             String first="Synthetic hello नमस्ते 👋";String id=UUID.randomUUID().toString();peer.request("POST","/v1/messages",new JSONObject().put("to",own.crypto.id).put("id",id).put("envelope",friend.seal(recipient,id,first)));waitFor(()->text(first),"inbound decrypted message");
+            assertEquals("An already-visible conversation does not need a duplicate alert",0,notifications.getActiveNotifications().length);
+            OnlinePush.disable(context);
             type("composer","SYNTHETIC_OUTGOING_NOTE");click("send");type("composer","KEEP-THIS-DRAFT");
             AtomicReference<JSONObject> inbox=new AtomicReference<>();waitFor(()->{JSONArray list=peer.request("GET","/v1/inbox",null).getJSONArray("messages");if(list.length()>0)inbox.set(list.getJSONObject(0));if(inbox.get()==null)Thread.sleep(400);return inbox.get()!=null;},"outbound relay delivery");
             JSONObject message=inbox.get();OnlineCrypto.Contact sender=new OnlineCrypto.Contact(own.crypto.profile("Owner"));assertEquals("SYNTHETIC_OUTGOING_NOTE",friend.open(sender,message.getString("id"),message.getString("envelope")));peer.request("POST","/v1/messages/"+message.getString("id")+"/ack",new JSONObject());waitFor(()->text("delivered to phone"),"live delivery receipt");assertEquals("KEEP-THIS-DRAFT",value("composer"));capture("online-04-chat");

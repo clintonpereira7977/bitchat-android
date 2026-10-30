@@ -70,3 +70,28 @@ node test/runtime.mjs
 Use Node 24 for the tests (`node:sqlite`). The runtime check starts a disposable local workerd and temporary SQLite state, uses generated synthetic signing keys, and never sends real Google notifications or touches a Cloudflare account. The GitHub Actions **Check ChitChat internet backend** workflow runs these checks. No cloud deployment occurs in CI.
 
 Never log request headers, signed bodies, push tokens, service credentials or message envelopes when diagnosing real devices.
+
+## Notification delivery checks (0.1.2)
+
+Deploy this update without reinstalling the existing Android beta. Turn Online
+notifications off and on once on the receiving phone. PUT /v1/push now validates
+its stored token through Google's validate_only API; errors return 503 with a
+fixed pushResult code instead of a false registration success. A failed provider
+request does not interrupt chat delivery. The public health response exposes
+pushDiagnostics: v1 and pushLastResult (a fixed code only, no user or time).
+PERMISSION_DENIED points to the sender role/API configuration; SENDER_ID_MISMATCH
+points to the Firebase project; AUTHENTICATION_FAILED points to the runtime key.
+ACCEPTED proves provider acceptance only. Android settings, Play services and
+battery restrictions still need real-device checks.
+
+GET /v1/push/status returns only the authenticated account's registration and
+last sanitized provider result. POST /v1/push/test sends a generic test to that
+same registered device, is capped at three per five minutes/ten per day, and
+accepts no caller-supplied destination. Its API never returns a token or raw
+Google error. Diagnostic rows expire after 24 hours, are removed on opt-out or
+account deletion, and in-flight callbacks cannot recreate deleted registrations.
+Old clients ignore the new fields; beta 2 adds the test/settings UI.
+
+The public install homepage intentionally retains beta 1 while existing-user
+signing/migration is unresolved. Do not replace working user installations or
+claim CI proved delivery to physical phones.

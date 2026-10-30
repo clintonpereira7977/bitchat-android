@@ -7,11 +7,15 @@ import com.google.firebase.messaging.RemoteMessage;
 public final class ChitChatMessagingService extends FirebaseMessagingService {
     @Override public void onNewToken(String token) { OnlinePush.recordRotatedToken(this, token); }
     @Override public void onMessageReceived(RemoteMessage message) {
-        if(OnlineActivity.foreground){sendBroadcast(new android.content.Intent(OnlineActivity.SYNC).setPackage(getPackageName()));return;}
-        PushNotifications.show(this, message.getData().get("kind"));
+        dispatch(this, message.getData());
+    }
+    static void dispatch(android.content.Context context, java.util.Map<String,String> data) {
+        if(OnlineActivity.foreground && !"test".equals(data.get("kind"))){context.sendBroadcast(new android.content.Intent(OnlineActivity.SYNC).setPackage(context.getPackageName()));return;}
+        PushNotifications.show(context, data.get("kind"));
     }
     @Override public void onDeletedMessages() {
-        // Fetch the signed inbox the next time Online opens; never silently
-        // open/decrypt a chat or keep its transcript in a background service.
+        if (OnlineActivity.foreground) sendBroadcast(new android.content.Intent(OnlineActivity.SYNC).setPackage(getPackageName()));
+        else PushNotifications.show(this, "inbox");
+        // Fetch the signed inbox when Online opens; never decrypt in the background.
     }
 }

@@ -32,7 +32,7 @@ export default {
 export class DeliveryService extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env); this.env = env;
-    this.initialized = ctx.blockConcurrencyWhile(async () => { this.store = new DeliveryStore(ctx.storage.sql, env, Date.now, (id, event) => this.notify(id, event)); });
+    this.initialized = ctx.blockConcurrencyWhile(async () => { this.store = new DeliveryStore(ctx.storage.sql, env, Date.now, (id, event) => this.notify(id, event), (token, kind, validateOnly) => sendPush(this.env, token, kind, fetch, Date.now(), validateOnly)); });
   }
   async fetch(request) {
     await this.initialized;
@@ -62,7 +62,7 @@ export class DeliveryService extends DurableObject {
   }
   notify(id, event) {
     for (const socket of this.ctx.getWebSockets(id)) try { socket.send(JSON.stringify(event)); if (event.type === 'account-deleted') socket.close(1000, 'Account deleted'); } catch { try { socket.close(1011, 'Reconnect'); } catch {} }
-    if (event.type !== 'delivered') this.ctx.waitUntil(sendPush(this.env, this.store.pushToken(id), event.type));
+    if (event.type !== 'delivered') this.ctx.waitUntil(this.store.deliverPush(id, event.type));
   }
   webSocketMessage(socket, message) {
     if (typeof message !== 'string' || message !== 'ping') { socket.close(1008, 'Unsupported event'); return; }

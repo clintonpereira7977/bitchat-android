@@ -32,7 +32,7 @@ public final class OnlineActivity extends Activity {
     private LinearLayout root,body,messages;private ScrollView scroller;
     private EditText composer,codeInput,inviteInput;private TextView status;
     private WebSocket socket;private int retry=1;private boolean refreshBusy,refreshAgain,metaDirty,drainBusy;
-    private long lastMeta;
+    private long lastMeta;private boolean inboxPrimed,notificationSetupBusy;
     private Map<String,OnlineCrypto.Contact> contacts=new LinkedHashMap<>();
     private List<OnlineCrypto.Contact> requests=new ArrayList<>();
     private final Map<String,PendingSend> sends=new HashMap<>();
@@ -52,7 +52,7 @@ public final class OnlineActivity extends Activity {
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(chatId!=null)closeChat();PushNotifications.clear(this);requestRefresh(true);}
     @Override protected void onStart(){
-        super.onStart();visible=true;foreground=true;life++;chatId=null;chatEpoch++;refreshBusy=false;drainBusy=false;refreshAgain=false;lastMeta=0;
+        super.onStart();visible=true;foreground=true;life++;chatId=null;chatEpoch++;refreshBusy=false;drainBusy=false;refreshAgain=false;lastMeta=0;inboxPrimed=false;notificationSetupBusy=false;
         if(Build.VERSION.SDK_INT>=33)registerReceiver(hints,new IntentFilter(SYNC),Context.RECEIVER_NOT_EXPORTED);else registerReceiver(hints,new IntentFilter(SYNC));
         int generation=life;loading();run(()->{
             OnlineIdentity id=new OnlineIdentity(this);OnlineStore data=new OnlineStore(this,id.storage);OnlineApi transport=new OnlineApi(id.crypto,origin);
@@ -110,7 +110,7 @@ public final class OnlineActivity extends Activity {
         c.addView(text("Your people.",34,WHITE));space(c,14);
         LinearLayout identityRow=new LinearLayout(this);identityRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView id=mono("ID / "+OnlineCrypto.formattedCode(identity.crypto.code),15,WHITE);id.setTextIsSelectable(true);identityRow.addView(id,new LinearLayout.LayoutParams(0,dp(48),1));id.setGravity(Gravity.CENTER_VERTICAL);
-        Button share=button("Share",false,()->{Intent intent=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Find me on ChitChat: "+OnlineCrypto.formattedCode(identity.crypto.code)+" ("+nickname+"). Open Online → Add a friend. Android beta: https://raw.githubusercontent.com/clintonpereira7977/bitchat-android/refs/heads/codex/chitchat-download/downloads/ChitChat-0.3-beta1.apk");startActivity(Intent.createChooser(intent,"Share your public ChitChat ID"));});share.setContentDescription("Share my ChitChat ID");identityRow.addView(share,new LinearLayout.LayoutParams(dp(90),dp(48)));c.addView(identityRow);space(c,10);
+        Button share=button("Share",false,()->{Intent intent=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Find me on ChitChat: "+OnlineCrypto.formattedCode(identity.crypto.code)+" ("+nickname+"). Open Online → Add a friend. Android beta: https://raw.githubusercontent.com/clintonpereira7977/bitchat-android/refs/heads/codex/chitchat-download/downloads/ChitChat-0.3-beta2.apk");startActivity(Intent.createChooser(intent,"Share your public ChitChat ID"));});share.setContentDescription("Share my ChitChat ID");identityRow.addView(share,new LinearLayout.LayoutParams(dp(90),dp(48)));c.addView(identityRow);space(c,10);
         status=text("Messages clear here when you leave.",13,DIM);c.addView(status);space(c,14);rule(c);
         if(!requests.isEmpty()){space(c,18);c.addView(mono("KNOCK KNOCK / REQUESTS",11,DIM));for(OnlineCrypto.Contact friend:requests){space(c,14);c.addView(text(friend.name+" · "+OnlineCrypto.formattedCode(friend.code),17,WHITE));space(c,8);LinearLayout row=new LinearLayout(this);Button accept=button("Accept",true,()->decide(friend,true)),decline=button("Decline",false,()->decide(friend,false));accept.setTag("accept_"+friend.id);decline.setTag("decline_"+friend.id);row.addView(accept,new LinearLayout.LayoutParams(0,dp(52),1));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(52),1);p.leftMargin=dp(10);row.addView(decline,p);c.addView(row);}}
         space(c,20);c.addView(mono("SAY A LITTLE HELLO",11,DIM));
@@ -119,7 +119,9 @@ public final class OnlineActivity extends Activity {
         space(c,22);rule(c);space(c,18);c.addView(mono("A NEW CONNECTION",11,DIM));space(c,10);
         codeInput=field("Friend’s eight-character ID","add_code",12,false);codeInput.setText(draftCode);c.addView(codeInput);space(c,10);
         Button add=button("Add a friend    +",true,this::findFriend);add.setTag("add_friend");c.addView(add);
-        space(c,20);Button notifications=button(OnlinePush.enabled(this)?"Notifications on · turn off":"Enable quiet notifications",false,this::notificationChoice);notifications.setTag("notifications");c.addView(notifications);space(c,10);
+        space(c,20);String notificationLabel=!OnlinePush.enabled(this)?"Enable notifications":OnlinePush.ready(this)?"Notifications on · turn off":"Finish notification setup";
+        Button notifications=button(notificationLabel,false,this::notificationChoice);notifications.setTag("notifications");c.addView(notifications);space(c,10);
+        if(OnlinePush.enabled(this)){String problem=PushNotifications.problem(this);if(problem!=null){c.addView(text(problem,13,DIM));space(c,8);}Button check=button("Check notifications",false,this::checkNotifications);check.setTag("check_notifications");c.addView(check);space(c,10);}
         c.addView(button("Refresh",false,()->requestRefresh(true)));space(c,12);TextView settings=mono("YOUR ID & PRIVACY   ↗",11,DIM);settings.setPadding(0,dp(16),0,dp(16));settings.setOnClickListener(v->account());c.addView(settings);
         if(focus){codeInput.requestFocus();codeInput.setSelection(codeInput.length());}
     }
@@ -143,7 +145,7 @@ public final class OnlineActivity extends Activity {
         main.removeCallbacks(refreshTask);main.postDelayed(refreshTask,450);
     }
     private static final class Snapshot {
-        Map<String,OnlineCrypto.Contact> contacts;List<OnlineCrypto.Contact> requests;String warning="";boolean more;
+        Map<String,OnlineCrypto.Contact> contacts;List<OnlineCrypto.Contact> requests;String warning="";boolean more;Set<String> newSenders=new HashSet<>();boolean newRequest;
     }
     private void refresh(){
         if(!visible||api==null||store==null||!store.registered()||refreshBusy)return;
@@ -158,18 +160,22 @@ public final class OnlineActivity extends Activity {
                 }
                 state.requests=new ArrayList<>();JSONArray incoming=api.request("GET","/v1/requests",null).getJSONArray("requests");
                 for(int i=0;i<incoming.length();i++)try{state.requests.add(new OnlineCrypto.Contact(incoming.getJSONObject(i).getJSONObject("account")));}catch(Exception e){state.warning="An incompatible request was ignored.";}
+                for(OnlineCrypto.Contact request:state.requests){boolean known=false;for(OnlineCrypto.Contact old:oldRequests)if(old.id.equals(request.id)){known=true;break;}if(!known)state.newRequest=true;}
             }
             JSONArray inbox=api.request("GET","/v1/inbox",null).getJSONArray("messages");
             int confirmed=0;
             for(int i=0;i<inbox.length();i++){
                 JSONObject message=inbox.getJSONObject(i);if(!state.contacts.containsKey(message.getString("sender")))continue;
+                boolean known=store.hasDelivery(message.getString("id"));
                 if(!store.stage(message)){state.warning="Your phone’s pending queue is full. Open a conversation to make room.";break;}
+                if(!known&&message.getLong("expires")>System.currentTimeMillis())state.newSenders.add(message.getString("sender"));
                 try{api.request("POST","/v1/messages/"+message.getString("id")+"/ack",new JSONObject());confirmed++;}
                 catch(Exception e){state.warning="A delivery confirmation will retry when you reconnect.";break;}
                 if(confirmed>=10){state.more=true;break;}
             }
             return state;
         },state->{refreshBusy=false;contacts=state.contacts;requests=state.requests;if(metadata)lastMeta=System.currentTimeMillis();
+            if(inboxPrimed&&foreground){boolean other=false;for(String sender:state.newSenders)if(!sender.equals(chatId)){other=true;break;}if(other)PushNotifications.show(this,"inbox");else if(state.newRequest)PushNotifications.show(this,"requests");}inboxPrimed=true;
             if(chatId!=null&&!contacts.containsKey(chatId)){closeChat();notice("This connection is no longer available.");}
             else if(chatId==null)lobby();else drainChat();
             if(!state.warning.isEmpty()&&status!=null)status.setText(state.warning);
@@ -246,9 +252,10 @@ public final class OnlineActivity extends Activity {
     }
     private void block(OnlineCrypto.Contact friend){dialog=new AlertDialog.Builder(this).setTitle("Block "+friend.name+"?").setMessage("Messages and requests from this ID will stop. This pilot has no unblock option.").setPositiveButton("Block",(d,w)->run(()->{api.request("POST","/v1/contacts/"+friend.id+"/block",new JSONObject());store.forget(friend.id);return true;},ok->{closeChat();requestRefresh(true);},this::error)).setNegativeButton("Cancel",null).show();}
     private void notificationChoice(){
-        if(OnlinePush.enabled(this)){OnlinePush.disable(this);run(()->api.request("DELETE","/v1/push",null),ok->lobby(),failure->{lobby();notice("Alerts are off on this phone. Server cleanup will retry when you choose Nearby.");});return;}
+        if(OnlinePush.enabled(this)&&OnlinePush.ready(this)){disableNotifications();return;}
         if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},33);return;}enableNotifications();
     }
+    private void disableNotifications(){notificationSetupBusy=false;OnlinePush.disable(this);run(()->api.request("DELETE","/v1/push",null),ok->lobby(),failure->{lobby();notice("Alerts are off on this phone. Server cleanup will retry when you choose Nearby.");});}
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==33){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)enableNotifications();else notice("You can chat normally. Open the app to check messages.");}}
     private void enableNotifications(){if(!visible||store==null||!store.registered())return;
         run(()->api.request("GET","/v1/health",null),health->{
@@ -257,10 +264,31 @@ public final class OnlineActivity extends Activity {
         },this::error);
     }
     private void resumeNotifications(){
-        if(!OnlinePush.enabled(this)||identity==null)return;int generation=life;
-        OnlinePush.requestToken(this,(token,available)->main.post(()->{if(!visible||life!=generation||!OnlinePush.enabled(this))return;if(!available){notice("Notifications aren’t available right now. Open the app to check messages.");return;}
-            run(()->api.request("PUT","/v1/push",new JSONObject().put("token",token)),ok->{OnlinePush.acknowledgeToken(this,token);notice("Generic notifications are enabled.");},this::error);
+        if(!OnlinePush.enabled(this)||identity==null||notificationSetupBusy)return;int generation=life;notificationSetupBusy=true;
+        OnlinePush.requestToken(this,(token,available)->main.post(()->{if(!visible||life!=generation||!OnlinePush.enabled(this))return;if(!available){notificationSetupBusy=false;if(chatId==null)lobby();notice("Google Play services couldn’t register notifications. Check your connection and Play services, then choose Finish notification setup.");return;}
+            run(()->api.request("PUT","/v1/push",new JSONObject().put("token",token)),ok->{notificationSetupBusy=false;if(!ok.optBoolean("registered")){if(chatId==null)lobby();notice("Notification registration didn’t complete. Try setup again.");return;}OnlinePush.acknowledgeToken(this,token);if(chatId==null)lobby();notice("Notification registration completed. Use Check notifications to test delivery.");},failure->{notificationSetupBusy=false;if(chatId==null)lobby();error(failure);});
         }));
+    }
+    private void notificationSettings(){
+        Intent settings=new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName());
+        try{startActivity(settings);}catch(ActivityNotFoundException ignored){startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+getPackageName())));}
+    }
+    private void checkNotifications(){
+        String problem=PushNotifications.problem(this);
+        if(problem!=null){dialog=new AlertDialog.Builder(this).setTitle("Android notification settings").setMessage(problem+"\n\nCheck sound, vibration and pop-up alerts. Android’s Do Not Disturb settings can also silence alerts.").setPositiveButton("Open settings",(d,w)->notificationSettings()).setNeutralButton("Turn off alerts",(d,w)->disableNotifications()).setNegativeButton("Done",null).show();return;}
+        run(()->api.request("GET","/v1/push/status",null),result->{
+            String message="ANDROID / alerts allowed\nPHONE / "+(OnlinePush.ready(this)?"registration completed":"setup needs attention")+"\nSERVER / "+PushPolicy.result(result.optString("result"));
+            boolean expired="UNREGISTERED".equals(result.optString("result"));
+            dialog=new AlertDialog.Builder(this).setTitle("A little notification check").setMessage(message+"\n\nSend a test through Google to this phone. It contains no chat text. Battery restrictions or Do Not Disturb may delay or silence it.").setPositiveButton(expired?"Refresh registration":"Send test",(d,w)->{if(expired)refreshNotificationRegistration();else sendNotificationTest();}).setNeutralButton("Turn off alerts",(d,w)->disableNotifications()).setNegativeButton("Settings",(d,w)->notificationSettings()).show();
+        },failure->{if(failure instanceof OnlineApi.Failure&&((OnlineApi.Failure)failure).status==404)notice("The app owner needs to deploy the latest notification-check server code first.");else error(failure);});
+    }
+    private void sendNotificationTest(){run(()->api.request("POST","/v1/push/test",new JSONObject()),result->{notice(PushPolicy.result(result.optString("result")));},this::error);}
+    private void refreshNotificationRegistration(){
+        if(notificationSetupBusy||!OnlinePush.enabled(this))return;notificationSetupBusy=true;int generation=life;
+        try{com.google.firebase.messaging.FirebaseMessaging.getInstance().deleteToken().addOnCompleteListener(task->{
+            if(!visible||life!=generation||!OnlinePush.enabled(this))return;notificationSetupBusy=false;
+            if(task.isSuccessful())resumeNotifications();else notice("Google couldn’t refresh registration. Check your connection and try again.");
+        });}catch(RuntimeException failure){notificationSetupBusy=false;notice("Google Play services couldn’t refresh registration.");}
     }
     private void nearby(){
         OnlinePush.disable(this);OnlineStore.lastOnline(this,false);

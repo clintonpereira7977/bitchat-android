@@ -49,6 +49,7 @@ final class OnlineStore {
         if(expires>now+90000000)throw new java.security.GeneralSecurityException("Invalid delivery expiry");
         pending.put(id,new JSONObject(message.toString()));save();return true;
     }
+    synchronized boolean hasDelivery(String id) throws Exception { purge();return pending.has(id)||seen.has(id); }
     synchronized List<JSONObject> pending(String sender) throws Exception {
         purge();List<JSONObject> messages=new ArrayList<>();for(String key:keys(pending)){JSONObject m=pending.getJSONObject(key);if(sender.equals(m.getString("sender")))messages.add(new JSONObject(m.toString()));}
         Collections.sort(messages,(a,b)->{int c=Long.compare(a.optLong("created"),b.optLong("created"));return c!=0?c:a.optString("id").compareTo(b.optString("id"));});return messages;

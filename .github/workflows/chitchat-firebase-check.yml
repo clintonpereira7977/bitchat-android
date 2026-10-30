@@ -86,7 +86,7 @@ jobs:
             cat notification-tests.txt
             mkdir -p dist/online-ui
             adb pull /sdcard/Android/data/app.chitchat/files/. dist/online-ui/
-            python3 -c "from pathlib import Path; s=Path('notification-tests.txt').read_text(); assert 'OK (9 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native Online checks failed'"
+            python3 -c "from pathlib import Path; s=Path('notification-tests.txt').read_text(); assert 'OK (11 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, 'Native Online checks failed'"
             adb shell pm clear app.chitchat
             mkdir -p dist
             cp android/app/build/outputs/apk/debug/app-debug.apk dist/ChitChat-android.apk
@@ -95,9 +95,9 @@ jobs:
       - name: Verify production installer signature
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/release/app-release.apk dist/ChitChat-0.3-beta1.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/ChitChat-0.3-beta1.apk
-          sha256sum dist/ChitChat-0.3-beta1.apk > dist/SHA256SUMS-0.3-beta1.txt
+          cp android/app/build/outputs/apk/release/app-release.apk dist/ChitChat-0.3-beta2.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/ChitChat-0.3-beta2.apk
+          sha256sum dist/ChitChat-0.3-beta2.apk > dist/SHA256SUMS-0.3-beta2.txt
       - name: Read public live service configuration without creating accounts
         run: |
           python3 - <<'PYHEALTH'
@@ -123,8 +123,8 @@ jobs:
             chitchat/dist/online-ui/*.png
             chitchat/dist/online-ui/*.xml
             chitchat/dist/ui/*.png
-            chitchat/dist/ChitChat-0.3-beta1.apk
-            chitchat/dist/SHA256SUMS-0.3-beta1.txt
+            chitchat/dist/ChitChat-0.3-beta2.apk
+            chitchat/dist/SHA256SUMS-0.3-beta2.txt
             chitchat/dist/LIVE-SERVICE.json
           if-no-files-found: ignore
       - name: Publish beta only after native Online and Bluetooth checks pass

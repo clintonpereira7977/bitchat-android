@@ -39,14 +39,14 @@ final class OnlineApi {
             while((n=stream.read(buffer))!=-1){if(bytes.size()+n>262144)throw new IOException("Response too large");bytes.write(buffer,0,n);}
             JSONObject result;
             try{result=new JSONObject(bytes.toString("UTF-8"));}catch(Exception e){throw new IOException("Service returned an invalid response");}
-            if(!response.isSuccessful())throw new Failure(response.code(),result.optString("error","service_error"));
+            if(!response.isSuccessful())throw new Failure(response.code(),result.optString("error","service_error"),result.optString("pushResult",""));
             return result;
         }
     }
     WebSocket events(String ticket,WebSocketListener listener){return http.newWebSocket(new Request.Builder().url(origin.replaceFirst("^http","ws")+"/v1/events").header("Sec-WebSocket-Protocol","chitchat.v1, ticket."+ticket).build(),listener);}
     void cancel(){cancelled=true;http.dispatcher().cancelAll();}
     static final class Failure extends IOException {
-        final int status;final String code;Failure(int status,String code){super(code);this.status=status;this.code=code;}
+        final int status;final String code,detail;Failure(int status,String code){this(status,code,"");}Failure(int status,String code,String detail){super(code);this.status=status;this.code=code;this.detail=detail;}
     }
     static String friendly(Exception error){
         if(error instanceof Failure){String code=((Failure)error).code;
@@ -57,6 +57,8 @@ final class OnlineApi {
                 case "not_found": return "That ID or request wasn’t found. Check the eight-character ID.";
                 case "contact_approval_required": return "Your friend needs to accept your request before you can chat.";
                 case "contact_not_available": return "This connection is unavailable.";
+                case "push_setup_failed": return PushPolicy.result(((Failure)error).detail);
+                case "push_not_registered": return "Finish notification setup on this phone first.";
                 case "pilot_limit_reached":case "pilot_account_limit": return "The pilot’s current limit has been reached. Try again later.";
                 case "inbox_full":case "queue_full": return "The delivery queue is full. Try again after your friend opens the app.";
                 default:return "The service couldn’t complete that action. Try again shortly.";

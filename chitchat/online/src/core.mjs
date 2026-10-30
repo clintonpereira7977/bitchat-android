@@ -59,8 +59,8 @@ export async function readBody(request) {
   try { return decode.decode(all); } catch { throw new ApiError(400, 'invalid_json'); }
 }
 export class DeliveryStore {
-  constructor(sql, env = {}, clock = Date.now, emit = () => {}) {
-    this.sql = sql; this.env = env; this.clock = clock; this.emit = emit;
+  constructor(sql, env = {}, clock = Date.now, emit = () => {}, pushSender = async () => ({ sent: false, code: 'NOT_CONFIGURED' })) {
+    this.sql = sql; this.env = env; this.clock = clock; this.emit = emit; this.pushSender = pushSender;
     this.exec('CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, identity_key TEXT NOT NULL, name TEXT NOT NULL, key_bundle TEXT NOT NULL, push_token TEXT, created INTEGER NOT NULL)');
     this.exec('CREATE TABLE IF NOT EXISTS dedup (id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL, digest TEXT NOT NULL, expires INTEGER NOT NULL)');
     this.exec('CREATE INDEX IF NOT EXISTS dedup_expiry ON dedup(expires)');
@@ -74,6 +74,7 @@ export class DeliveryStore {
     this.exec('CREATE TABLE IF NOT EXISTS quotas (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL)');
     this.exec('CREATE TABLE IF NOT EXISTS tickets (hash TEXT PRIMARY KEY, account TEXT NOT NULL, expires INTEGER NOT NULL)');
     this.exec('CREATE INDEX IF NOT EXISTS tickets_expiry ON tickets(expires)');
+    this.exec('CREATE TABLE IF NOT EXISTS push_status (account TEXT PRIMARY KEY, code TEXT NOT NULL, checked INTEGER NOT NULL, validation INTEGER NOT NULL)');
   }
   exec(query, ...parameters) { return this.sql.exec(query, ...parameters); }
   rows(query, ...parameters) { return [...this.exec(query, ...parameters)]; }
@@ -81,6 +82,7 @@ export class DeliveryStore {
   purge() {
     const now = this.clock();
     for (const table of ['messages', 'dedup', 'nonces', 'quotas', 'tickets']) this.exec(`DELETE FROM ${table} WHERE expires <= ?`, now);
+    this.exec('DELETE FROM push_status WHERE checked <= ?', now - DAY);
     this.exec("DELETE FROM contacts WHERE state = 'pending' AND created <= ?", now - DAY);
   }
   quota(bucket, limit, expires) {
@@ -93,7 +95,10 @@ export class DeliveryStore {
     if (rows.some(row => row.state === 'blocked')) return false;
     return rows.some(row => row.state === 'accepted');
   }
-  get health() { return { service: 'ChitChat delivery', version: '0.1.1', status: 'ok', queueTTLSeconds: DAY / 1000, registrationConfigured: Boolean(this.env.PILOT_INVITE_CODE), pushConfigured: Boolean(this.env.FCM_SERVICE_ACCOUNT_JSON), pushPayload: 'data-only-v1', appIntegration: 'android-beta1' }; }
+  get health() {
+    const last = this.first('SELECT code FROM push_status WHERE checked > ? ORDER BY checked DESC LIMIT 1', this.clock() - DAY);
+    return { service: 'ChitChat delivery', version: '0.1.2', status: 'ok', queueTTLSeconds: DAY / 1000, registrationConfigured: Boolean(this.env.PILOT_INVITE_CODE), pushConfigured: Boolean(this.env.FCM_SERVICE_ACCOUNT_JSON), pushPayload: 'data-only-v1', pushDiagnostics: 'v1', pushLastResult: last?.code || 'NOT_CHECKED', appIntegration: 'android-beta1' };
+  }
   admit(ipHash) {
     const now = this.clock(), day = Math.floor(now / DAY), minute = Math.floor(now / 60000);
     this.purge();
@@ -146,6 +151,7 @@ export class DeliveryStore {
       this.exec('DELETE FROM dedup WHERE sender=? OR recipient=?', actor.id, actor.id);
       this.exec('DELETE FROM contacts WHERE sender=? OR recipient=?', actor.id, actor.id);
       this.exec('DELETE FROM nonces WHERE account=?', actor.id); this.exec('DELETE FROM tickets WHERE account=?', actor.id);
+      this.exec('DELETE FROM push_status WHERE account=?', actor.id);
       this.exec('DELETE FROM accounts WHERE id=?', actor.id); this.emit(actor.id, { type: 'account-deleted' }); return json({ deleted: true });
     }
     if (request.method === 'PUT' && path === '/v1/me') {
@@ -197,9 +203,29 @@ export class DeliveryStore {
     }
     if (request.method === 'PUT' && path === '/v1/push') {
       require(typeof input.token === 'string' && input.token.length >= 20 && input.token.length <= 4096 && !/[\s\u0000-\u001f]/.test(input.token));
-      this.exec('UPDATE accounts SET push_token=? WHERE id=?', input.token, actor.id); return json({ registered: true, pushConfigured: this.health.pushConfigured });
+      if (this.health.pushConfigured) this.quota(`push-setup:${actor.id}:${minute}`, 3, now + 120000);
+      this.exec('UPDATE accounts SET push_token=? WHERE id=?', input.token, actor.id);
+      this.exec('DELETE FROM push_status WHERE account=?', actor.id);
+      // Validate with Google before telling a client its setup worked. The
+      // existing beta can use this endpoint without reinstalling or losing ID.
+      if (this.health.pushConfigured) {
+        const result = await this.deliverPush(actor.id, 'test', true);
+        if (!result.sent) return json({ error: 'push_setup_failed', pushResult: result.code }, 503);
+      }
+      return json({ registered: Boolean(this.pushToken(actor.id)), pushConfigured: this.health.pushConfigured });
     }
-    if (request.method === 'DELETE' && path === '/v1/push') { this.exec('UPDATE accounts SET push_token=NULL WHERE id=?', actor.id); return json({ registered: false }); }
+    if (request.method === 'DELETE' && path === '/v1/push') { this.exec('UPDATE accounts SET push_token=NULL WHERE id=?', actor.id); this.exec('DELETE FROM push_status WHERE account=?', actor.id); return json({ registered: false }); }
+    if (request.method === 'GET' && path === '/v1/push/status') {
+      const last = this.first('SELECT code,checked,validation FROM push_status WHERE account=? AND checked > ?', actor.id, now - DAY);
+      return json({ registered: Boolean(existing.push_token), configured: this.health.pushConfigured, result: last?.code || 'NOT_CHECKED', checkedAt: last?.checked || null, validationOnly: Boolean(last?.validation) });
+    }
+    if (request.method === 'POST' && path === '/v1/push/test') {
+      require(existing.push_token, 409, 'push_not_registered');
+      this.quota(`push-test:${actor.id}:${Math.floor(now / 300000)}`, 3, now + 600000);
+      this.quota(`push-test-day:${actor.id}:${day}`, 10, (day + 2) * DAY);
+      const result = await this.deliverPush(actor.id, 'test');
+      return json({ accepted: result.sent, result: result.code });
+    }
     if (request.method === 'POST' && path === '/v1/messages') {
       require(typeof input.to === 'string' && ID.test(input.to) && typeof input.id === 'string' && MESSAGE_ID.test(input.id));
       const envelope = input.envelope; unb64(envelope, 48, 8192);
@@ -242,4 +268,15 @@ export class DeliveryStore {
     this.exec('DELETE FROM tickets WHERE hash=?', key); return row?.account || null;
   }
   pushToken(account) { return this.first('SELECT push_token FROM accounts WHERE id=?', account)?.push_token || null; }
+  async deliverPush(account, kind, validateOnly = false) {
+    const token = this.pushToken(account);
+    let result;
+    try { result = await this.pushSender(token, kind, validateOnly); } catch { result = { sent: false, code: 'PROVIDER_UNAVAILABLE' }; }
+    const allowed = ['ACCEPTED', 'NOT_CONFIGURED', 'NO_DEVICE_TOKEN', 'INVALID_CONFIGURATION', 'AUTHENTICATION_FAILED', 'UNREGISTERED', 'SENDER_ID_MISMATCH', 'PERMISSION_DENIED', 'UNAUTHENTICATED', 'QUOTA_EXCEEDED', 'UNAVAILABLE', 'INTERNAL', 'INVALID_ARGUMENT', 'PROVIDER_UNAVAILABLE'];
+    const code = allowed.includes(result.code) ? result.code : 'PROVIDER_UNAVAILABLE';
+    // An in-flight callback must not reintroduce state after opt-out, account
+    // deletion or a token rotation. Never persist a token or provider response.
+    if (token && token === this.pushToken(account)) this.exec('INSERT INTO push_status(account,code,checked,validation) VALUES(?,?,?,?) ON CONFLICT(account) DO UPDATE SET code=excluded.code,checked=excluded.checked,validation=excluded.validation', account, code, this.clock(), validateOnly ? 1 : 0);
+    return { sent: result.sent === true && code === 'ACCEPTED', code };
+  }
 }

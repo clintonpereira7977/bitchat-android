@@ -5,7 +5,7 @@ import { b64 } from '../src/core.mjs';
 
 test('notifications stay disabled until Firebase credentials are configured', async () => {
   const calls = []; const fetcher = (...args) => { calls.push(args); throw Error('No external requests expected'); };
-  assert.deepEqual(await sendPush({}, 'synthetic-push-token', 'inbox', fetcher), { sent: false, configured: false });
+  assert.deepEqual(await sendPush({}, 'synthetic-push-token', 'inbox', fetcher), { sent: false, configured: false, code: 'NOT_CONFIGURED' });
   assert.equal((await sendPush({ FCM_SERVICE_ACCOUNT_JSON: 'invalid-json' }, 'synthetic-push-token', 'inbox', fetcher)).sent, false); assert.equal(calls.length, 0);
 });
 test('push uses data-only hints, caches OAuth safely, and never includes message ciphertext or plaintext', async () => {
@@ -34,5 +34,32 @@ test('push uses data-only hints, caches OAuth safely, and never includes message
   invalidatePushCache();
   const failed = async url => url.includes('oauth2') ? Response.json({ access_token: 'synthetic', expires_in: 3600 }) : new Response(null, { status: 503 });
   assert.equal((await sendPush(env, 'synthetic-push-token', 'inbox', failed, now)).sent, false);
+  invalidatePushCache();
+});
+
+test('Firebase validation and error codes distinguish setup failures without leaking provider text', async () => {
+  invalidatePushCache();
+  const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+  const bytes = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
+  const key = btoa(String.fromCharCode(...bytes));
+  const env = { FCM_SERVICE_ACCOUNT_JSON: JSON.stringify({ project_id: 'synthetic-chitchat', client_email: 'push@synthetic-chitchat.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\n' + key + '\n-----END PRIVATE KEY-----' }) };
+  const captured = [];
+  let code = 'SENDER_ID_MISMATCH';
+  const fetcher = async (url, options) => {
+    if (url.includes('oauth2')) return Response.json({ access_token: 'synthetic-oauth-token', expires_in: 3600 });
+    captured.push(JSON.parse(options.body));
+    return Response.json({ error: { status: 'PERMISSION_DENIED', message: 'DO_NOT_DISCLOSE_PRIVATE_PROVIDER_RESPONSE', details: [{ '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError', errorCode: code }] } }, { status: 403 });
+  };
+  let result = await sendPush(env, 'synthetic-device-token', 'test', fetcher, Date.now(), true);
+  assert.equal(result.code, 'SENDER_ID_MISMATCH'); assert.equal(result.sent, false);
+  assert.equal(captured[0].validate_only, true); assert.deepEqual(captured[0].message.data, { kind: 'test' });
+  assert.ok(!JSON.stringify(result).includes('DO_NOT_DISCLOSE'));
+  code = 'UNREGISTERED'; result = await sendPush(env, 'synthetic-device-token', 'test', fetcher);
+  assert.equal(result.code, 'UNREGISTERED'); assert.equal('validate_only' in captured[1], false);
+  code = 'UNRECOGNIZED_PRIVATE_TEXT'; result = await sendPush(env, 'synthetic-device-token', 'test', fetcher);
+  assert.equal(result.code, 'PERMISSION_DENIED'); assert.ok(!JSON.stringify(result).includes('PRIVATE_TEXT'));
+  invalidatePushCache();
+  result = await sendPush(env, 'synthetic-device-token', 'test', async () => new Response('DO_NOT_DISCLOSE', { status: 400 }));
+  assert.equal(result.code, 'AUTHENTICATION_FAILED');
   invalidatePushCache();
 });

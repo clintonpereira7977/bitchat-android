@@ -35,6 +35,33 @@ test('deployment starts healthy and closed to registration without its pilot sec
   const health = await response.json(); assert.equal(health.registrationConfigured, false); assert.equal(health.pushConfigured, false); assert.equal(health.appIntegration, 'android-beta1');
   assert.equal((await call(f, a, 'POST', '/v1/register', { name: 'A', keyBundle: {} })).status, 503); f.db.close();
 });
+test('notification validation and self-tests are authenticated, account-bound, rate-limited and disclose only safe codes', async () => {
+  const f = fixture({ FCM_SERVICE_ACCOUNT_JSON: 'synthetic-config-only' }), a = await actor(), b = await actor();await register(f,a);await register(f,b);
+  const calls=[];let result={sent:true,code:'ACCEPTED'};
+  f.store.pushSender=async (token,kind,validateOnly)=>{calls.push({token,kind,validateOnly});return result;};
+  assert.equal((await f.store.handle(new Request('https://chitchat.test/v1/push/test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}))).status,401);
+  assert.equal((await call(f,b,'POST','/v1/push/test',{})).status,409);assert.equal(calls.length,0);
+  assert.equal((await call(f,a,'PUT','/v1/push',{token:'synthetic-owner-device-token'})).status,200);assert.equal(calls[0].validateOnly,true);
+  let status=await call(f,a,'GET','/v1/push/status');assert.equal(status.body.result,'ACCEPTED');assert.equal(status.body.validationOnly,true);assert.equal(JSON.stringify(status).includes('synthetic-owner-device-token'),false);
+  assert.equal((await call(f,b,'GET','/v1/push/status')).body.registered,false);
+  result={sent:false,code:'PERMISSION_DENIED',secret:'PRIVATE_PROVIDER_DETAILS'};
+  let test=await call(f,a,'POST','/v1/push/test',{token:'someone-elses-device-token'});assert.equal(test.body.result,'PERMISSION_DENIED');assert.equal(test.body.accepted,false);assert.equal(calls[1].token,'synthetic-owner-device-token');assert.equal(calls[1].validateOnly,false);assert.equal(JSON.stringify(test).includes('PRIVATE_PROVIDER_DETAILS'),false);
+  assert.equal(f.store.health.pushLastResult,'PERMISSION_DENIED');
+  await call(f,a,'POST','/v1/push/test',{});await call(f,a,'POST','/v1/push/test',{});assert.equal((await call(f,a,'POST','/v1/push/test',{})).status,429);
+  result={sent:false,code:'SENDER_ID_MISMATCH'};
+  let setup=await call(f,a,'PUT','/v1/push',{token:'synthetic-new-device-token'});assert.equal(setup.status,503);assert.equal(setup.body.pushResult,'SENDER_ID_MISMATCH');
+  await call(f,a,'DELETE','/v1/push');assert.equal((await call(f,a,'GET','/v1/push/status')).body.result,'NOT_CHECKED');assert.equal((await call(f,a,'GET','/v1/push/status')).body.registered,false);
+  f.db.close();
+});
+test('late push callbacks cannot restore deleted registrations and diagnostic state expires after one day', async () => {
+  const f=fixture({ FCM_SERVICE_ACCOUNT_JSON:'synthetic-config-only' }),a=await actor();await register(f,a);
+  f.store.pushSender=async()=>({sent:true,code:'ACCEPTED'});await call(f,a,'PUT','/v1/push',{token:'synthetic-owner-device-token'});
+  let finish;f.store.pushSender=()=>new Promise(resolve=>{finish=resolve;});const pending=f.store.deliverPush(a.id,'inbox');
+  await call(f,a,'DELETE','/v1/push');finish({sent:true,code:'ACCEPTED'});await pending;assert.equal(f.store.first('SELECT count(*) AS n FROM push_status').n,0);
+  f.store.pushSender=async()=>({sent:true,code:'ACCEPTED'});f.now+=120000;await call(f,a,'PUT','/v1/push',{token:'synthetic-owner-device-token'});
+  f.now+=DAY+1;f.store.purge();assert.equal(f.store.first('SELECT count(*) AS n FROM push_status').n,0);
+  await call(f,a,'DELETE','/v1/me');assert.equal(f.store.pushToken(a.id),null);f.db.close();
+});
 test('signatures authenticate keys and bind the method, body, path and clock; requests cannot replay', async () => {
   const f = fixture(), a = await actor(), b = await actor(); await register(f, a);
   assert.equal((await f.store.handle(new Request('https://chitchat.test/v1/me'))).status, 401);
