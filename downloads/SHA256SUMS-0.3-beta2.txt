@@ -1,0 +1,1 @@
+19ce405e8547ab43df285aa789b0b196d151d425ecf6727645861ce289a8d04f  dist/ChitChat-0.3-beta2.apk
