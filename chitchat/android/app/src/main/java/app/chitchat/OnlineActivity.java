@@ -106,7 +106,7 @@ public final class OnlineActivity extends Activity {
     private void lobby(){
         if(chatId!=null)return;
         boolean focus=codeInput!=null&&codeInput.hasFocus();if(codeInput!=null)draftCode=codeInput.getText().toString();
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);base("online");LinearLayout c=page();modes(c);space(c,22);
+        if(foreground)getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);base("online");LinearLayout c=page();modes(c);space(c,22);
         c.addView(text("Your people.",34,WHITE));space(c,14);
         LinearLayout identityRow=new LinearLayout(this);identityRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView id=mono("ID / "+OnlineCrypto.formattedCode(identity.crypto.code),15,WHITE);id.setTextIsSelectable(true);identityRow.addView(id,new LinearLayout.LayoutParams(0,dp(48),1));id.setGravity(Gravity.CENTER_VERTICAL);
@@ -282,7 +282,7 @@ public final class OnlineActivity extends Activity {
         // Android stops it. Clear the opened view at the earlier boundary.
         foreground=false;if(chatId!=null)closeChat();super.onPause();
     }
-    @Override protected void onResume(){super.onResume();foreground=visible;if(visible&&store!=null&&store.registered())requestRefresh(true);}
+    @Override protected void onResume(){super.onResume();foreground=visible;if(visible&&chatId==null)getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);if(visible&&store!=null&&store.registered())requestRefresh(true);}
     @Override protected void onSaveInstanceState(Bundle state){/* No drafts, transcript or private invite in saved state. */super.onSaveInstanceState(new Bundle());}
     @Override protected void onStop(){
         visible=false;foreground=false;life++;chatEpoch++;chatId=null;main.removeCallbacksAndMessages(null);
